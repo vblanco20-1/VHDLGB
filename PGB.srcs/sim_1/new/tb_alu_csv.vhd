@@ -49,8 +49,8 @@ end component;
 
 signal aluin: alu_in;
 signal aluout : alu_out;
-signal outhalf : gb_word;
-signal outhalf_i,out_i, o_fz, o_fn, o_fh, o_fc : integer;
+--signal outhalf : gb_word;
+--signal outhalf_i,out_i, o_fz, o_fn, o_fh, o_fc : integer;
 
 function itou ( b : in integer ) return std_logic is   
 begin      
@@ -111,9 +111,10 @@ begin
  
   puts("EXPECTED  = ", op_res);
 
-  puts(" ------------ ");
   wait for 1 ns;
  
+  puts("GOT  = ", to_integer(unsigned(aout.op_R)));
+  puts(" ------------ ");
   -- TEST OUTPUTS
   check_equal(to_integer(unsigned(aout.op_R)), op_res, result(":OP Error: " & s.all));
  
@@ -127,28 +128,18 @@ end run_csv;
 
 begin
 
-
-
-outhalf <= aluout.op_R(7 downto 0);
-
-
 alu: gb_alu port map (i => aluin, o => aluout);
 
-
 main : process
-variable csv_file_1: csv_file_reader_type;
-variable op_res, f_z, f_n, f_h, f_c : integer;
-variable op_A_i,op_B_i, i_db, i_usecarry , i_fc: integer;
-variable name : string ( 256 to 0);
-variable s: line;
+variable csv_file_1,csv_file_2,csv_file_3,csv_file_4,csv_file_5: csv_file_reader_type;
 begin
   test_runner_setup(runner, runner_cfg);
 	
 	--setup
-	aluin.op_A <= x"0000";
-	aluin.op_B <= x"0010";
+	--aluin.op_A <= x"0000";
+	--aluin.op_B <= x"0010";
 	aluin.double <= '0';
-	aluin.with_carry <= '0';
+	--aluin.with_carry <= '0';
 	aluin.flags <= zero_alu_flags;  
 
 if run("add") then
@@ -163,14 +154,46 @@ if run("add") then
 end if;
 
 
-if run("and") then
 
-  csv_file_1.initialize("/mnt/d/FPGA/PGB/PGB.srcs/sim_1/new/data/alu_and_tests.csv");
+if run("sub") then
+
+  csv_file_2.initialize("/mnt/d/FPGA/PGB/PGB.srcs/sim_1/new/data/alu_sub_tests.csv");
 
   --read the first line with column names to skip  
-  csv_file_1.readline;
+  csv_file_2.readline;
 
-  run_csv(csv_file_1,o_AND,aluin,aluout);
+  run_csv(csv_file_2,o_SUB,aluin,aluout);
+end if;
+
+
+if run("and") then
+
+  csv_file_3.initialize("/mnt/d/FPGA/PGB/PGB.srcs/sim_1/new/data/alu_and_tests.csv");
+
+  --read the first line with column names to skip  
+  csv_file_3.readline;
+
+  run_csv(csv_file_3,o_AND,aluin,aluout);
+end if;
+
+if run("or") then
+
+  csv_file_4.initialize("/mnt/d/FPGA/PGB/PGB.srcs/sim_1/new/data/alu_or_tests.csv");
+
+  --read the first line with column names to skip  
+  csv_file_4.readline;
+
+  run_csv(csv_file_4,o_OR,aluin,aluout);
+end if;
+
+if run("xor") then
+
+  csv_file_5.initialize("/mnt/d/FPGA/PGB/PGB.srcs/sim_1/new/data/alu_xor_tests.csv");
+
+  --read the first line with column names to skip  
+  csv_file_5.readline;
+
+  run_csv(csv_file_5,o_XOR,aluin,aluout);
 end if;
 
   test_runner_cleanup(runner); -- Simulation ends here

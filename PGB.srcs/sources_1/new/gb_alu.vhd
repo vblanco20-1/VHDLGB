@@ -43,9 +43,11 @@ comb: process(i)
 variable v:  alu_out;
 
 variable Au,Bu : unsigned(7 downto 0);
-variable Aub,Bub : unsigned(8 downto 0);
+variable Aub,Bub,carry : unsigned(8 downto 0);
 variable FullAccum : unsigned(8 downto 0);
 variable HalfAccum : unsigned(4 downto 0);
+variable sFullAccum : signed(8 downto 0);
+variable sHalfAccum : signed(4 downto 0);
 variable result : gb_word;
 
 --variable wants_load: std_logic;
@@ -63,46 +65,44 @@ result := x"00";
 Au := unsigned(i.op_A(7 downto 0));
 Bu := unsigned(i.op_B(7 downto 0));
 
-if(i.mode = o_ADD or i.mode = o_SUB) then
-    if ((i.with_carry and i.flags.full_carry) = '1') then 
-        Bu := Bu + 1;
-    end if;
-end if;
+
 
 Aub(8) := '0';
 Bub(8) := '0';
 Aub(7 downto 0) := Au;
 Bub(7 downto 0) := Bu; 
 
+carry := to_unsigned(0,9);
+if ((i.with_carry and i.flags.full_carry) = '1') then 
+    carry(0) := '1';
+end if;
+
 case(i.mode) is
 when o_ADD => 
-        
+            
+    FullAccum := Aub + Bub + carry;
 
-    FullAccum := Aub + Bub;
+    HalfAccum := ('0' & Aub(3 downto 0)) + ('0' & Bub(3 downto 0)) + carry(4 downto 0);
 
-    HalfAccum := ('0' & Au(3 downto 0)) + ('0' & Bu(3 downto 0));
     v.flags.full_carry := FullAccum(8);
     v.flags.half_carry := HalfAccum(4);  
 
     result :=  std_logic_vector(FullAccum(7 downto 0));
     
 when o_SUB =>
-    FullAccum(7 downto 0) := Au - Bu;
-   
-    v.flags.full_carry := btol( Au < Bu );
-    v.flags.half_carry := btol((Au and x"0f") < (Bu and x"0f"));
-
-    
+    FullAccum := Aub - (Bub + carry);
+    HalfAccum := ('0' & Aub(3 downto 0)) - ('0' & Bub(3 downto 0)) - carry(4 downto 0);
+  
+    v.flags.full_carry := FullAccum(8);
+    v.flags.half_carry :=  HalfAccum(4); 
 
     v.flags.subtract := '1';
+    --result := std_logic_vector(sFullAccum(7 downto 0));
     result := std_logic_vector(FullAccum(7 downto 0));
-
 when o_AND => 
     FullAccum(7 downto 0) := Au and Bu;   
 
     v.flags.half_carry := '1'; -- for some reason AND wants halfcarry at 1
-
-  
 
     result := std_logic_vector(FullAccum(7 downto 0));
 when o_OR => 
@@ -111,13 +111,11 @@ when o_OR =>
     result := std_logic_vector(FullAccum(7 downto 0));
 when o_XOR => 
     FullAccum(7 downto 0) := Au xor Bu;   
-    
-  
 
     result := std_logic_vector(FullAccum(7 downto 0));
 end case;
 
-if FullAccum(7 downto 0) = x"00" then 
+if result = x"00" then 
         v.flags.zero := '1';
 else
         v.flags.zero := '0';
