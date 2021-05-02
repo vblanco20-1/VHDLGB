@@ -24,14 +24,62 @@ use IEEE.STD_LOGIC_1164.ALL;
 
 package gb_package is
 
- type gb_px_coord is record
-    x  : std_logic_vector(7 downto 0);
-    y : std_logic_vector(7 downto 0);
+  subtype  gb_word IS std_logic_vector (7 DOWNTO 0);
+  subtype  gb_doubleword IS std_logic_vector (15 DOWNTO 0);
+
+  type gb_px_coord is record
+    x  : gb_word;
+    y : gb_word;
   end record gb_px_coord;  
 
- type gb_2px is record
+  type gb_2px is record
     data : std_logic_vector(1 downto 0);
   end record gb_2px;  
 
-type gb_pixel_line is array (7 downto 0) of gb_2px; -- 8 pixel line
+  type alu_flags is record
+    zero       : std_logic;
+    subtract   : std_logic;
+    half_carry : std_logic;
+    full_carry : std_logic;  
+  end record alu_flags;
+
+  constant zero_alu_flags : alu_flags := (      
+    zero => '0',                       
+    subtract => '0',
+    half_carry => '0',
+    full_carry => '0'
+  );
+
+  type alu_operation is (
+    o_ADD, 
+    o_SUB, 
+    o_AND,
+    o_OR,
+    o_XOR
+  );
+
+  type alu_in is record 
+    op_A :  gb_doubleword;
+    op_B :  gb_doubleword;
+    mode : alu_operation;
+    double : std_logic; -- to use double width logic
+    with_carry : std_logic; -- for add/sub with carry ops
+    flags : alu_flags;
+  end record alu_in;
+
+  type alu_out is record  
+    op_R :  gb_doubleword; --doubleword output
+    flags : alu_flags; -- flags
+  end record alu_out;
+
+  constant zero_alu_out : alu_out := (      
+    op_R => x"0000",                       
+    flags => zero_alu_flags
+  );
+  
+  type gb_pixel_line is array (7 downto 0) of gb_2px; -- 8 pixel line
+
+  
+ 
+
 end package gb_package;
