@@ -1,0 +1,5 @@
+op_a,op_b,double,carry,fc,op_r,r_zero,r_sub,r_half,r_carry,name
+0,0,0,0,0,0,1,0,0,0,zero add
+0,0,0,1,1,1,0,0,0,0,zero add carry
+0,0,0,1,0,0,1,0,0,0,zero add nocarry
+15,1,0,0,0,16,0,0,1,0,16 add 

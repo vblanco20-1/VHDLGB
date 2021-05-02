@@ -1,0 +1,4 @@
+op_a,op_b,double,carry,fc,op_r,r_zero,r_sub,r_half,r_carry,name
+0,0,0,0,0,0,1,0,1,0,zero and
+0,0,0,1,1,0,1,0,1,0,zero and carry
+31,15,0,1,1,15,0,0,1,0,zero add nocarry

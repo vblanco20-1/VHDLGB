@@ -63,8 +63,10 @@ result := x"00";
 Au := unsigned(i.op_A(7 downto 0));
 Bu := unsigned(i.op_B(7 downto 0));
 
-if ((i.with_carry and i.flags.full_carry) = '1') then 
-    Bu := Bu + 1;
+if(i.mode = o_ADD or i.mode = o_SUB) then
+    if ((i.with_carry and i.flags.full_carry) = '1') then 
+        Bu := Bu + 1;
+    end if;
 end if;
 
 Aub(8) := '0';
@@ -74,7 +76,8 @@ Bub(7 downto 0) := Bu;
 
 case(i.mode) is
 when o_ADD => 
-    
+        
+
     FullAccum := Aub + Bub;
 
     HalfAccum := ('0' & Au(3 downto 0)) + ('0' & Bu(3 downto 0));
@@ -92,7 +95,7 @@ when o_SUB =>
     
 
     v.flags.subtract := '1';
-    v.op_R := std_logic_vector(FullAccum(7 downto 0));
+    result := std_logic_vector(FullAccum(7 downto 0));
 
 when o_AND => 
     FullAccum(7 downto 0) := Au and Bu;   
@@ -101,17 +104,17 @@ when o_AND =>
 
   
 
-    v.op_R := std_logic_vector(FullAccum(7 downto 0));
+    result := std_logic_vector(FullAccum(7 downto 0));
 when o_OR => 
     FullAccum(7 downto 0) := Au or Bu;
 
-    v.op_R := std_logic_vector(FullAccum(7 downto 0));
+    result := std_logic_vector(FullAccum(7 downto 0));
 when o_XOR => 
     FullAccum(7 downto 0) := Au xor Bu;   
     
   
 
-    v.op_R := std_logic_vector(FullAccum(7 downto 0));
+    result := std_logic_vector(FullAccum(7 downto 0));
 end case;
 
 if FullAccum(7 downto 0) = x"00" then 
