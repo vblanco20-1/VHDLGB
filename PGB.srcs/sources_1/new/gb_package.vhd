@@ -43,12 +43,7 @@ package gb_package is
     full_carry : std_logic;  
   end record alu_flags;
 
-  constant zero_alu_flags : alu_flags := (      
-    zero => '0',                       
-    subtract => '0',
-    half_carry => '0',
-    full_carry => '0'
-  );
+
 
   type alu_operation is (
     o_ADD, 
@@ -79,11 +74,14 @@ package gb_package is
     PCin : gb_doubleword; -- PC register in
   end record reg_in;
 
+  
+
   type reg_out is record 
     data_A, data_B, PC :  gb_doubleword; -- register outputs
     flags : alu_flags; -- output alu flags
   end record reg_out;
    
+
 
   type alu_in is record 
     op_A :  gb_doubleword;
@@ -99,14 +97,76 @@ package gb_package is
     flags : alu_flags; -- flags
   end record alu_out;
 
+  type ram_in is record  
+    addr :  gb_doubleword; 
+    data : gb_word; 
+    we : std_logic;
+  end record ram_in;
+
+  type ram_out is record     
+    data : gb_word; 
+  end record ram_out;
+  
+  type decoder_in is record 
+    reg :  reg_out;
+    alu :  alu_out;
+    ram : ram_out;
+  end record decoder_in;
+
+  type decoder_out is record 
+  reg :  reg_in;
+  alu :  alu_in;
+  ram : ram_in;
+  end record decoder_out;
+
+  type gb_pixel_line is array (7 downto 0) of gb_2px; -- 8 pixel line
+
+  constant zero_ram_in : ram_in := (      
+    addr => x"0000", 
+    data => x"00", 
+    we  => '0'
+  );
+
+  constant zero_alu_flags : alu_flags := (      
+    zero => '0',                       
+    subtract => '0',
+    half_carry => '0',
+    full_carry => '0'
+  );
+
+  constant zero_alu_in : alu_in := (      
+    op_A => x"0000",   
+    op_B => x"0000",   
+    mode => o_ADD,
+    double => '0',
+    with_carry => '0',
+    flags => zero_alu_flags
+  );
+
   constant zero_alu_out : alu_out := (      
     op_R => x"0000",                       
     flags => zero_alu_flags
   );
-  
-  type gb_pixel_line is array (7 downto 0) of gb_2px; -- 8 pixel line
 
-  
- 
+  constant zero_reg_in : reg_in := (
+    reg_A => A, 
+    reg_B => A, 
+    write_enable => '0',
+    data => x"0000", 
+    flags => zero_alu_flags,
+    PCin => x"0000"
+  );
+  constant zero_reg_out : reg_out := (
+    data_A => x"0000", 
+    data_B => x"0000", 
+    PC => x"0000", 
+    flags => zero_alu_flags
+  );
+
+  constant zero_decoder_out : decoder_out := (      
+    reg => zero_reg_in,                       
+    alu => zero_alu_in,
+    ram => zero_ram_in
+  );
 
 end package gb_package;

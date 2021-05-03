@@ -62,13 +62,6 @@ architecture Behavioral of gb_reg is
         SP => x"0000"
       );
 
-    constant zero_output : reg_out := (
-        data_A => x"0000", 
-        data_B => x"0000", 
-        PC => x"0000", 
-        flags => zero_alu_flags
-    );
-
 function get_register ( regs : in reg_state; name : in reg_name  ) return gb_doubleword is   
 variable res : gb_doubleword;
 begin      
@@ -159,10 +152,10 @@ begin
 
 if reset = '1' then 
     v := zero_registers;
-    ov := zero_output;
+    ov := zero_reg_out;
 else 
     v := r;
-    ov := zero_output;
+    ov := zero_reg_out;
 
     if(i.write_enable = '1') then 
         v := set_register(r,i.reg_A,i.data);
