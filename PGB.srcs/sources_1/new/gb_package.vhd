@@ -88,7 +88,6 @@ package gb_package is
     mode : alu_operation;
     double : std_logic; -- to use double width logic
     with_carry : std_logic; -- for add/sub with carry ops
-    flags : alu_flags;
   end record alu_in;
 
   type alu_out is record  
@@ -138,8 +137,7 @@ package gb_package is
     op_B => x"0000",   
     mode => o_ADD,
     double => '0',
-    with_carry => '0',
-    flags => zero_alu_flags
+    with_carry => '0'
   );
 
   constant zero_alu_out : alu_out := (      

@@ -72,7 +72,7 @@ Aub(7 downto 0) := Au;
 Bub(7 downto 0) := Bu; 
 
 carry := to_unsigned(0,9);
-if ((i.with_carry and i.flags.full_carry) = '1') then 
+if ((i.with_carry) = '1') then 
     carry(0) := '1';
 end if;
 

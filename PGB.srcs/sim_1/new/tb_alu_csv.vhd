@@ -95,8 +95,7 @@ begin
   ain.op_B <= std_logic_vector(to_unsigned(op_B_i, 16));
 
   ain.double <= '1' when i_db = 1 else '0';
-  ain.with_carry <='1' when i_usecarry = 1 else '0';
-  ain.flags.full_carry <= '1' when i_fc = 1 else '0';
+  ain.with_carry <='1' when (i_usecarry = 1 and i_fc = 1) else '0';
 
   ain.mode <= mode;
 
@@ -135,12 +134,7 @@ variable csv_file_1,csv_file_2,csv_file_3,csv_file_4,csv_file_5: csv_file_reader
 begin
   test_runner_setup(runner, runner_cfg);
 	
-	--setup
-	--aluin.op_A <= x"0000";
-	--aluin.op_B <= x"0010";
 	aluin.double <= '0';
-	--aluin.with_carry <= '0';
-	aluin.flags <= zero_alu_flags;  
 
 if run("add") then
 

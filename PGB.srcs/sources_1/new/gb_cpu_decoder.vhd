@@ -322,8 +322,7 @@ else
 
      -- alu outputs
     ov.alu.mode := instruction_to_alu(v.inst);
-    ov.alu.double := '0';
-    ov.alu.flags := i.reg.flags;
+    ov.alu.double := '0';    
     ov.alu.op_A(7 downto 0) := i.reg.data_A;
 
     if(v.inst = R_ALU_INC or v.inst = R_ALU_DEC)   then 
@@ -344,7 +343,7 @@ else
     ov.ram.data := x"00";
 
     if(v.inst = R_ALU_ADC or v.inst = R_ALU_ADC) then
-        ov.alu.with_carry := '1';
+        ov.alu.with_carry := '1' and i.reg.flags.full_carry;
     else
         ov.alu.with_carry := '0';
     end if;
