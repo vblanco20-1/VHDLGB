@@ -58,6 +58,33 @@ package gb_package is
     o_XOR
   );
 
+  type reg_name is (
+    A, F,
+    B, C,
+    D, E,
+    H, L,
+
+    AF, BC, DE, HL, SP
+  );
+
+  type reg_in is record 
+
+    reg_A : reg_name; -- register for output 1
+    reg_B : reg_name; -- register for output 2
+   
+    write_enable : std_logic; -- enable writing, to reg A from data
+
+    data :  gb_doubleword; -- data to write to reg-a
+    flags : alu_flags; -- input alu flags
+    PCin : gb_doubleword; -- PC register in
+  end record reg_in;
+
+  type reg_out is record 
+    data_A, data_B, PC :  gb_doubleword; -- register outputs
+    flags : alu_flags; -- output alu flags
+  end record reg_out;
+   
+
   type alu_in is record 
     op_A :  gb_doubleword;
     op_B :  gb_doubleword;

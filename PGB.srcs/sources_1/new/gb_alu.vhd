@@ -66,7 +66,6 @@ Au := unsigned(i.op_A(7 downto 0));
 Bu := unsigned(i.op_B(7 downto 0));
 
 
-
 Aub(8) := '0';
 Bub(8) := '0';
 Aub(7 downto 0) := Au;
