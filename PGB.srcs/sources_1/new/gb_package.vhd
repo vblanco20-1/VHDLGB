@@ -57,9 +57,7 @@ package gb_package is
     A, F,
     B, C,
     D, E,
-    H, L,
-
-    AF, BC, DE, HL, SP
+    H, L
   );
 
   type reg_in is record 
@@ -69,7 +67,7 @@ package gb_package is
    
     write_enable : std_logic; -- enable writing, to reg A from data
 
-    data :  gb_doubleword; -- data to write to reg-a
+    data :  gb_word; -- data to write to reg-a
     flags : alu_flags; -- input alu flags
     PCin : gb_doubleword; -- PC register in
   end record reg_in;
@@ -77,7 +75,8 @@ package gb_package is
   
 
   type reg_out is record 
-    data_A, data_B, PC :  gb_doubleword; -- register outputs
+    data_A, data_B:  gb_word; -- register outputs
+    PC  : gb_doubleword;
     flags : alu_flags; -- output alu flags
   end record reg_out;
    
@@ -152,13 +151,13 @@ package gb_package is
     reg_A => A, 
     reg_B => A, 
     write_enable => '0',
-    data => x"0000", 
+    data => x"00", 
     flags => zero_alu_flags,
     PCin => x"0000"
   );
   constant zero_reg_out : reg_out := (
-    data_A => x"0000", 
-    data_B => x"0000", 
+    data_A => x"00", 
+    data_B => x"00", 
     PC => x"0000", 
     flags => zero_alu_flags
   );

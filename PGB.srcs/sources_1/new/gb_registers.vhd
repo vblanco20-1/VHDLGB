@@ -62,46 +62,38 @@ architecture Behavioral of gb_reg is
         SP => x"0000"
       );
 
-function get_register ( regs : in reg_state; name : in reg_name  ) return gb_doubleword is   
-variable res : gb_doubleword;
+function get_register ( regs : in reg_state; name : in reg_name  ) return gb_word is   
+variable res : gb_word;
 begin      
-   res := x"0000";
+   res := x"00";
 case(name) is
-    when A => res(7 downto 0) := regs.A;
-    when F => res(7 downto 0) := regs.F;
-    when B => res(7 downto 0) := regs.B;
-    when C => res(7 downto 0) := regs.C;
-    when D => res(7 downto 0) := regs.D;
-    when E => res(7 downto 0) := regs.E;
-    when H => res(7 downto 0) := regs.H;
-    when L => res(7 downto 0) := regs.L;
-    when AF => res(15 downto 8) := regs.A; res(7 downto 0) := regs.F;
-    when BC => res(15 downto 8) := regs.B; res(7 downto 0) := regs.C;
-    when DE => res(15 downto 8) := regs.D; res(7 downto 0) := regs.E;
-    when HL => res(15 downto 8) := regs.H; res(7 downto 0) := regs.L;
-    when others  => res := regs.SP; -- SP is the missing one
+    when A => res := regs.A;
+    when F => res := regs.F;
+    when B => res := regs.B;
+    when C => res := regs.C;
+    when D => res := regs.D;
+    when E => res := regs.E;
+    when H => res := regs.H;
+    when L => res := regs.L;
+    when others  => res := regs.SP(7 downto 0); -- SP is the missing one
 end case;
 
 return res;
 end get_register;
 
-function set_register ( regs : in reg_state; name : in reg_name; data : in gb_doubleword) return reg_state is   
+function set_register ( regs : in reg_state; name : in reg_name; data : in gb_word) return reg_state is   
 variable res : reg_state;
 begin      
    res := regs;
 case(name) is
-    when A => res.A :=  data(7 downto 0);
-    when F => res.F :=  data(7 downto 0);
-    when B => res.B :=  data(7 downto 0);
-    when C => res.C :=  data(7 downto 0);
-    when D => res.D :=  data(7 downto 0);
-    when E => res.E :=  data(7 downto 0);
-    when H => res.H :=  data(7 downto 0);
-    when L => res.L :=  data(7 downto 0);
-    when AF => res.A := data(15 downto 8 ); res.F := data(7 downto 0);
-    when BC => res.B := data(15 downto 8 ); res.C := data(7 downto 0);
-    when DE => res.D := data(15 downto 8 ); res.E := data(7 downto 0);
-    when HL => res.H := data(15 downto 8 ); res.L := data(7 downto 0);
+    when A => res.A :=  data;
+    when F => res.F :=  data;
+    when B => res.B :=  data;
+    when C => res.C :=  data;
+    when D => res.D :=  data;
+    when E => res.E :=  data;
+    when H => res.H :=  data;
+    when L => res.L :=  data;    
     when others  => res.SP := data; -- SP is the missing one
 end case;
 
