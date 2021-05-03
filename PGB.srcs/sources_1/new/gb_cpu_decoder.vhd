@@ -192,7 +192,7 @@ end instruction_has_reg_write;
 -- aludata is output from alu
 -- regdata is output B from regbank
 -- ramdata is last ram loaded word
-function select_reg_data(state : in instruction_state; regdata : in gb_word; aludata : in gb_doubleword; ramdata : in gb_word) return gb_word is
+function select_reg_data(state : in instruction_state; regdata : in reg_out; aludata : in gb_doubleword; ramdata : in gb_word) return gb_word is
 begin
     case (state) is 
     -- simple alus.
@@ -203,7 +203,7 @@ begin
     return aludata(7 downto 0);
     -- loads
     when R_LD => 
-        return regdata;
+        return regdata.data_B;
     -- loads RAM
     when I_LD_EXEC => 
         return ramdata;
@@ -297,6 +297,8 @@ else
             v.inst := r.next_i;
         end if;
     end if;
+
+    v.next_i := next_instr(r.inst);
     
 
     -- read registers
@@ -309,7 +311,7 @@ else
         ov.reg.write_enable := '0';
     end if;
    
-    ov.reg.data := select_reg_data(v.inst, i.reg.data_A,i.alu.op_R,  i.ram.data);
+    ov.reg.data := select_reg_data(v.inst, i.reg,i.alu.op_R,  i.ram.data);
     -- advance the PC at the last substate
     if(r.st = sWAIT) then 
         ov.reg.PCIn := std_logic_vector(unsigned(i.reg.PC) + to_unsigned(1,16));

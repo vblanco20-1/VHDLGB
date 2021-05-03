@@ -106,7 +106,7 @@ main : process
 begin
   test_runner_setup(runner, runner_cfg);
 	
-	if run("add") then
+	if run("add_basic") then
   read_reg <= '0';
   wantsclock <= '1';
   reset <= '1';
@@ -125,9 +125,49 @@ begin
 
   wait for 2 ns;
   check_equal( regout.data_A ,std_logic_vector'(x"02"), result("SHould give 2"));
+  end if;
+  if run("ld_basic") then
+    read_reg <= '0';
+    wantsclock <= '1';
+    reset <= '1';
+    ramdata <= x"0C"; -- INC C C = 1, A = 0
+    wait for 2 ns;
+    reset <= '0';
+    wait for 8 ns; -- 1 cycle
+    ramdata <= x"89"; -- ADC A,C C = 1, A = 1
+    wait for 8 ns; -- 1 cycle
+    ramdata <= x"81"; -- ADD A,C C = 1, A = 2
+    wait for 8 ns; -- 1 cycle
+    ramdata <= x"4F"; -- LD C,A C = 2, A = 2
+    wait for 8 ns; -- 1 cycle
+    ramdata <= x"81"; -- ADD A,C C = 2, A = 4
+    wait for 8 ns;
 
+    wantsclock <= '0';
+  
+    read_reg <= '1';
+  
+    wait for 2 ns;
+    check_equal( regout.data_A ,std_logic_vector'(x"04"), result("SHould give 4"));  
+  end if;
 
+  if run("ld_inst") then
+    read_reg <= '0';
+    wantsclock <= '1';
+    reset <= '1';
+    ramdata <= x"3E"; -- LD A , imm
+    wait for 2 ns;
+    reset <= '0';
+    wait for 8 ns; -- 1 cycle
+    ramdata <= x"33"; -- imm = 0x33
+    wait for 8 ns; -- 1 cycle
 
+    wantsclock <= '0';
+  
+    read_reg <= '1';
+  
+    wait for 2 ns;
+    check_equal( regout.data_A ,std_logic_vector'(x"33"), result("SHould give x33"));  
   end if;
 
   test_runner_cleanup(runner); -- Simulation ends here
