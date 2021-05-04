@@ -1,0 +1,7 @@
+$byte v1 = 0x12
+$byte v2 = 0x33
+$byte v3 = 0x22 
+:main
+ld b #0xFF
+ld d c
+add a b
