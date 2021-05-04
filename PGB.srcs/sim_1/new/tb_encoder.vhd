@@ -21,7 +21,7 @@
 
 library IEEE;
 use IEEE.STD_LOGIC_1164.ALL;
-
+use IEEE.NUMERIC_STD.ALL;
 library vunit_lib;
 context vunit_lib.vunit_context;
 
@@ -66,10 +66,41 @@ signal decout : decoder_out;
 
 signal outhalf : gb_word;
 signal ramdata : gb_word;
-signal reset,clock,wantsclock, read_reg : std_logic;
+signal reset,clock,wantsclock, read_reg,ramclock : std_logic;
 signal regin_tb : reg_in;
+
+signal use_tbram  : std_logic; 
+
+signal tr_idx , tr_saved_idx: std_logic_vector(15 downto 0);
+signal tr_data: gb_word;
+signal tr_nextdata: gb_word;
+TYPE mem_type IS ARRAY(0 TO 10) OF gb_word; 
+
+
+
+signal test_block_1 : mem_type := (
+--x"c3",x"0c",x"02",x"00",x"00",x"00",x"00",x"00"
+x"00",x"3E",x"33",x"7F",x"7F",x"00",x"76",x"76",x"00",x"00",x"00");
+
+
 begin
 
+ramsync : process (ramclock,tr_nextdata,tr_idx)
+begin
+  if rising_edge(ramclock) then
+      --tr_data <= tr_nextdata;
+      tr_saved_idx <= tr_idx;
+	end if;
+end process;
+
+ramcomb : process (tr_saved_idx)
+variable intid  : unsigned(15 downto 0);
+variable intdx : integer;
+begin
+  intid := unsigned(tr_saved_idx);
+  intdx := to_integer(intid);
+  tr_data <= test_block_1(intdx);
+end process;
 
 
 
@@ -85,8 +116,11 @@ dec: gb_decoder port map (clk=> clock, reset => reset, i => decin, o => decout);
 
 decin.reg <= regout;
 decin.alu <= aluout;
-decin.ram.data <= ramdata;
+decin.ram.data <= ramdata when use_tbram = '0' else tr_data;
 
+tr_idx <= decout.ram.addr;
+
+ramclock <= decout.ramclock;
 regin_tb <= zero_reg_in;
 
 regin <= decout.reg when read_reg = '0' else regin_tb ;
@@ -102,10 +136,11 @@ begin
 	wait for 1 ns;
 end process;
 
+
 main : process
 begin
   test_runner_setup(runner, runner_cfg);
-	
+	use_tbram <= '0';
 	if run("add_basic") then
   read_reg <= '0';
   wantsclock <= '1';
@@ -169,6 +204,59 @@ begin
     wait for 2 ns;
     check_equal( regout.data_A ,std_logic_vector'(x"33"), result("SHould give x33"));  
   end if;
+
+  if run("noops") then
+    read_reg <= '0';
+    wantsclock <= '1';
+    reset <= '1';
+    ramdata <= x"00"; -- Noop
+    wait for 2 ns;
+    reset <= '0';
+    wait for 8 ns; -- 1 cycle
+
+    check_equal( decout.ram.addr ,std_logic_vector'(x"0001"), result("CPU should try to read 1"));  
+
+    ramdata <= x"00"; -- Noop
+    wait for 8 ns; -- 1 cycle
+
+    check_equal( decout.ram.addr ,std_logic_vector'(x"0002"), result("CPU should try to read 2"));  
+
+    ramdata <= x"76"; -- HALT
+    wait for 8 ns; -- 1 cycle
+
+    check_equal( regout.PC ,std_logic_vector'(x"0002"), result("PC should stay at 2: 1"));  
+    wait for 8 ns; -- 1 cycle
+
+    check_equal( regout.PC ,std_logic_vector'(x"0002"), result("PC should stay at 2: 2"));  
+     
+    wait for 24 ns;
+    check_equal( regout.PC ,std_logic_vector'(x"0002"), result("PC should stay at 2: 3"));  
+  end if;
+
+  if run("stest") then
+    use_tbram <= '1';
+    read_reg <= '0';
+    wantsclock <= '1';
+    reset <= '1';
+    --ramdata <= x"00"; -- Noop
+    wait for 4 ns;
+    reset <= '0';
+    wait for 8 ns; -- 1 cycle
+
+    --check_equal( decout.ram.addr ,std_logic_vector'(x"0001"), result("CPU should try to read 1"));  
+
+    --ramdata <= x"00"; -- Noop
+    wait for 8 ns; -- 1 cycle
+
+    --check_equal( decout.ram.addr ,std_logic_vector'(x"0002"), result("CPU should try to read 2"));  
+     
+    wait for 50 ns;
+    read_reg <= '1';
+  
+    wait for 2 ns;
+    check_equal( regout.data_A ,std_logic_vector'(x"33"), result("SHould give x33"));   
+  end if;
+
 
   test_runner_cleanup(runner); -- Simulation ends here
   end process;

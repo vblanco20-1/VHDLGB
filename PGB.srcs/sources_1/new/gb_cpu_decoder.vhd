@@ -41,6 +41,7 @@ end gb_decoder;
 architecture Behavioral of gb_decoder is
 
     type cpu_state is (
+        sSTART,
         sFETCH, 
         sEXEC, 
         sWRITE,
@@ -50,7 +51,7 @@ architecture Behavioral of gb_decoder is
     -- R for pure-registers singlestate ops.
     -- I for inmediate ops 
     type instruction_state is (
-       NOOP,
+       NOOP, HALT,R_STOP,
 
        -- simple register alus. Always stores on A
        R_ALU_ADD,
@@ -71,15 +72,16 @@ architecture Behavioral of gb_decoder is
        I_LD_LOAD, I_LD_EXEC
     );
 
-    type dec_state is record 
-
+    type dec_state is record    
+        load_adress : gb_doubleword;    
         st : cpu_state;
         inst : instruction_state;
         next_i : instruction_state; -- next instruction. For multiclock
     end record dec_state;
 
-    constant zero_state : dec_state := (      
-        st => sFETCH,                       
+    constant zero_state : dec_state := (    
+        load_adress => x"0000",       
+        st => sSTART,                       
         inst => NOOP,
         next_i => NOOP
       );
@@ -90,6 +92,7 @@ architecture Behavioral of gb_decoder is
 function next_cpu_state (s : in cpu_state ) return cpu_state is   
 begin     
  case (s) is 
+    when sSTART => return sFETCH;
     when sFETCH => return sEXEC;
     when sEXEC => return sWRITE;
     when sWRITE => return sWAIT;
@@ -142,7 +145,11 @@ begin
     case (prefix) is 
     when "00" =>
     case (dz) is 
-        when "000" => return NOOP;
+        when "000" => 
+        if(dy = "010") then 
+            return R_STOP;
+        else return NOOP; end if;
+
         when "001" => return NOOP;
         when "010" => return NOOP;
         when "011" => return NOOP;
@@ -152,7 +159,12 @@ begin
         when others => return NOOP;    
     end case;
 
-    when "01" => return R_LD; -- prefix 01 is allways reg loads
+    when "01" => 
+    if(data = x"76") then 
+        return HALT;
+    else
+        return R_LD; -- prefix 01 is allways reg loads
+    end if;
     when "10" => 
    
     case (dy) is -- alu operations
@@ -239,7 +251,9 @@ begin
     ret.reg_A := decode_registers_basic(dy); 
     ret.reg_B := decode_registers_basic(dz);
 
-    when others => ret.write_enable := '0'; -- just default to OR when nothing happens
+    when others => 
+        ret.reg_B := A;
+        ret.reg_B := A; -- just default to A
     end case;
 
     return ret;
@@ -258,7 +272,11 @@ end next_instr;
 -- decide the next adress for the RAM
 function calculate_next_addr(inst : in instruction_state; din : in decoder_in ) return gb_doubleword is 
 begin
-    return  std_logic_vector(unsigned(din.reg.PC) + to_unsigned(1,16));
+    if(inst = R_STOP) then
+        return x"0000";
+    else
+        return  std_logic_vector(unsigned(din.reg.PC) + to_unsigned(1,16));
+    end if;
 end calculate_next_addr;
 
 -- decide if the instruction state writes to Ram
@@ -289,7 +307,7 @@ else
     v.st := next_cpu_state(r.st);
 
     -- read instruction
-    if(r.st = sFETCH) then 
+    if(r.st = sFETCH and r.inst /= HALT) then 
         -- if next is noop, its not a multiclock instruction
         if(r.next_i = NOOP) then 
             v.inst := decode_instruction_state(i.ram.data);
@@ -312,10 +330,18 @@ else
     end if;
    
     ov.reg.data := select_reg_data(v.inst, i.reg,i.alu.op_R,  i.ram.data);
-    -- advance the PC at the last substate
-    if(r.st = sWAIT) then 
-        ov.reg.PCIn := std_logic_vector(unsigned(i.reg.PC) + to_unsigned(1,16));
-    else 
+
+    -- advance the PC at the last state, to be ready for next fetch    
+    if(r.st = sWAIT and r.inst /= HALT) then      
+        case (r.inst) is 
+            when HALT => ov.reg.PCIn := i.reg.PC;
+            when R_STOP => ov.reg.PCIn := x"0000";
+            when others => ov.reg.PCIn := std_logic_vector(unsigned(i.reg.PC) + to_unsigned(1,16));
+        end case;
+        
+    elsif (r.st = sSTART) then 
+        ov.reg.PCIn := x"0000";        
+    else
         ov.reg.PCIn := i.reg.PC;
     end if;
     ov.reg.flags := i.alu.flags; 
@@ -333,7 +359,14 @@ else
     
 
     -- ram outputs
-    ov.ram.addr := calculate_next_addr(v.inst,i);
+    if(r.st = sSTART) then 
+        v.load_adress := x"0000";
+    elsif(r.st = sEXEC) then -- calculate next adress at EXEC stage
+        v.load_adress := calculate_next_addr(v.inst,i);
+    end  if;
+
+    ov.ram.addr := r.load_adress;
+    
     if(writes_to_ram(v.inst)) then 
         ov.ram.we  := '1';
     else
@@ -346,6 +379,13 @@ else
         ov.alu.with_carry := '1' and i.reg.flags.full_carry;
     else
         ov.alu.with_carry := '0';
+    end if;
+
+    -- clock syncronization. We want the value to update at the wait/exec stages
+    if(r.st = sFETCH or r.st = sWAIT) then
+        ov.ramclock := '1';
+    else
+        ov.ramclock := '0';
     end if;
 end if;
 

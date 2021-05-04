@@ -115,6 +115,7 @@ package gb_package is
   reg :  reg_in;
   alu :  alu_in;
   ram : ram_in;
+  ramclock : std_logic;
   end record decoder_out;
 
   type gb_pixel_line is array (7 downto 0) of gb_2px; -- 8 pixel line
@@ -163,7 +164,8 @@ package gb_package is
   constant zero_decoder_out : decoder_out := (      
     reg => zero_reg_in,                       
     alu => zero_alu_in,
-    ram => zero_ram_in
+    ram => zero_ram_in,
+    ramclock => '0'
   );
 
 end package gb_package;

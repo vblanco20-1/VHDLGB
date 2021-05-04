@@ -19,7 +19,7 @@ void export_tests(std::vector<alu_test_case> addtests, std::string filename)
 		}
 	}
 }
-
+#include "rambuilder.h"
 int main()
 {
 	auto addtests = test_battery_add();
@@ -41,6 +41,8 @@ int main()
 	auto xortests = test_battery_xor();
 
 	export_tests(xortests, "alu_xor_tests.csv");
+
+	dump_file_to_ram("D:/FPGA/PGB/PGB.srcs/sources_1/new/tetris.gb", "D:/FPGA/PGB/PGB.srcs/sources_1/new/tetrisdump.vhd");
 
 	return 0;
 }
