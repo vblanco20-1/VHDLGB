@@ -121,7 +121,7 @@ decin.ram.data <= ramdata when use_tbram = '0' else tr_data;
 tr_idx <= decout.ram.addr;
 
 ramclock <= decout.ramclock;
-regin_tb <= zero_reg_in;
+regin_tb <= debug_reg_in;
 
 regin <= decout.reg when read_reg = '0' else regin_tb ;
 

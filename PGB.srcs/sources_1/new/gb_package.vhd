@@ -57,7 +57,10 @@ package gb_package is
     A, F,
     B, C,
     D, E,
-    H, L
+    H, L,
+    SP,
+    One,
+    Zero
   );
 
   type reg_in is record 
@@ -147,8 +150,16 @@ package gb_package is
   );
 
   constant zero_reg_in : reg_in := (
+    reg_A => Zero, 
+    reg_B => Zero, 
+    write_enable => '0',
+    data => x"00", 
+    flags => zero_alu_flags,
+    PCin => x"0000"
+  );
+  constant debug_reg_in : reg_in := (
     reg_A => A, 
-    reg_B => A, 
+    reg_B => B, 
     write_enable => '0',
     data => x"00", 
     flags => zero_alu_flags,

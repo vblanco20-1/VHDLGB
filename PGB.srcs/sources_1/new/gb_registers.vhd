@@ -75,7 +75,9 @@ case(name) is
     when E => res := regs.E;
     when H => res := regs.H;
     when L => res := regs.L;
-    when others  => res := regs.SP(7 downto 0); -- SP is the missing one
+    when SP =>res := regs.SP(7 downto 0);
+    when One => res := x"01";
+    when others  =>  res := x"00";-- Zero is the missing one
 end case;
 
 return res;
@@ -94,7 +96,8 @@ case(name) is
     when E => res.E :=  data;
     when H => res.H :=  data;
     when L => res.L :=  data;    
-    when others  => res.SP := data; -- SP is the missing one
+    when SP => res.SP := data;
+    when others  => res.A := regs.A; -- dummy. never happens
 end case;
 
 return res;

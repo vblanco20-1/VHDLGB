@@ -24,6 +24,7 @@ use IEEE.STD_LOGIC_1164.ALL;
 
 library work;
 use work.gb_package.all;
+use work.gb_cu_pkg.all;
 use ieee.numeric_std.all;      
 
 
@@ -40,79 +41,30 @@ end gb_decoder;
 
 architecture Behavioral of gb_decoder is
 
-    type cpu_state is (
-        sSTART,
-        sFETCH, 
-        sEXEC, 
-        sWRITE,
-        sWAIT
-    );
-
-    -- R for pure-registers singlestate ops.
-    -- I for inmediate ops 
-    type instruction_state is (
-       NOOP, HALT,R_STOP,
-
-       -- simple register alus. Always stores on A
-       R_ALU_ADD,
-       R_ALU_ADC,
-       R_ALU_SUB,
-       R_ALU_SBC,
-       R_ALU_AND,
-       R_ALU_OR,
-       R_ALU_XOR,
-       -- inc/dec alus
-       R_ALU_INC,
-       R_ALU_DEC,
-        
-       PREFIX_CD,
-       -- register based load
-       R_LD,
-
-       I_LD_LOAD, I_LD_EXEC
-    );
-
     type dec_state is record    
         load_adress : gb_doubleword;    
+        branch_adress : gb_doubleword;
+        opcode : gb_word;
         st : cpu_state;
         inst : instruction_state;
         next_i : instruction_state; -- next instruction. For multiclock
+        do_branch : std_logic; -- perform branching
+
     end record dec_state;
 
     constant zero_state : dec_state := (    
-        load_adress => x"0000",       
-        st => sSTART,                       
+        load_adress => x"0000",    
+        branch_adress => x"0000",  
+        opcode => x"00",  
+        st => sSTART,
         inst => NOOP,
-        next_i => NOOP
+        next_i => NOOP,
+        do_branch => '0'
       );
 
     signal r,rin : dec_state;
 
     
-function next_cpu_state (s : in cpu_state ) return cpu_state is   
-begin     
- case (s) is 
-    when sSTART => return sFETCH;
-    when sFETCH => return sEXEC;
-    when sEXEC => return sWRITE;
-    when sWRITE => return sWAIT;
-    when sWAIT => return sFETCH;
- end case;
-end next_cpu_state;
-
-function decode_registers_basic(index: in std_logic_vector(2 downto 0)) return reg_name is
-begin
-    case (index) is 
-    when "000" => return B;
-    when "001" => return C;
-    when "010" => return D;
-    when "011" => return E;
-    when "100" => return H;
-    when "101" => return L;
-    when "110" => return A; -- this is  for memory loads careful
-    when others => return A; -- "111"
-    end case;
-end decode_registers_basic;
 
 --calculate the correct alu operation according to a given instruction state
 function instruction_to_alu(state : in instruction_state) return alu_operation is
@@ -143,9 +95,9 @@ begin
     dz := data(2 downto 0);
 
     case (prefix) is 
-    when "00" =>
+    when "00" => -- 0
     case (dz) is 
-        when "000" => 
+        when "000" =>
         if(dy = "010") then 
             return R_STOP;
         else return NOOP; end if;
@@ -159,13 +111,13 @@ begin
         when others => return NOOP;    
     end case;
 
-    when "01" => 
+    when "01" => -- 1
     if(data = x"76") then 
         return HALT;
     else
         return R_LD; -- prefix 01 is allways reg loads
     end if;
-    when "10" => 
+    when "10" => -- 2
    
     case (dy) is -- alu operations
         when "000" => return R_ALU_ADD;
@@ -178,7 +130,37 @@ begin
         when others => return PREFIX_CD;    
     end case;
 
-    when others => return NOOP;
+    when others => -- 3
+    case (dz) is 
+        when "000" =>  return NOOP;   
+        when "001" => return NOOP;
+        when "010" => 
+            case (dy) is 
+                when "000" => return I_ABS_BRANCH;
+                when "001" => return I_ABS_BRANCH;
+                when "010" => return I_ABS_BRANCH;
+                when "011" => return I_ABS_BRANCH;
+                when "100" => return NOOP;
+                when "101" => return NOOP;
+                when "110" => return NOOP;
+                when others => return NOOP;    
+            end case;
+
+        when "011" => 
+            case (dy) is 
+                when "000" => return I_ABS_BRANCH;
+                when "001" => return PREFIX_CD;
+                when others => return NOOP;
+            end case;
+        when "100" => return R_ALU_INC;
+        when "101" => return R_ALU_DEC;
+        when "110" => return I_LD_LOAD; -- inmediate load
+        when others => return NOOP;    
+    end case;
+    
+    
+    
+    return NOOP;
     end case;
 return NOOP;
 end decode_instruction_state;
@@ -242,29 +224,40 @@ begin
     ret.reg_A := A; 
     ret.reg_B := decode_registers_basic(dz);
 
-    -- inc-dec, allways 1 as B, so use default-A
+    -- inc-dec, allways 1 as B, use it
     when R_ALU_INC|R_ALU_DEC =>    
     ret.reg_A := decode_registers_basic(dy); 
-    ret.reg_B := A;
+    ret.reg_B := One;
     -- R2R LD, takes from y and z
     when R_LD => 
     ret.reg_A := decode_registers_basic(dy); 
     ret.reg_B := decode_registers_basic(dz);
-
+    when I_LD_EXEC =>
+    ret.reg_A := decode_registers_basic(dy); 
+    ret.reg_B := Zero;
     when others => 
-        ret.reg_B := A;
-        ret.reg_B := A; -- just default to A
+        ret.reg_B := Zero;
+        ret.reg_B := Zero; -- just default to cero
     end case;
 
     return ret;
 end read_registers;
 
--- decide the next instruction. For multiclocks.
+-- decide the next instruction. For multiclocks. and branches
 -- non multiclock instructions have to return noop
-function next_instr(inst : in instruction_state) return instruction_state is 
+function next_instr(inst : in instruction_state; branch : in std_logic) return instruction_state is 
 begin
     case (inst) is 
     when I_LD_LOAD => return I_LD_EXEC;
+    when I_ABS_BRANCH => return I_ABS_BRANCH_LD1;
+    when I_ABS_BRANCH_LD1 => return I_ABS_BRANCH_LD2;
+    when I_ABS_BRANCH_LD2 => --once branch address is loaded it decides if branching or not
+
+        if( branch = '1') then  -- if we have to branch, go to the next state to load PC
+            return I_ABS_BRANCH_JMP;
+        else 
+            return NOOP; -- if not branching we move to the next pc
+        end if;
     when others => return NOOP;
     end case;
 end next_instr;
@@ -272,13 +265,23 @@ end next_instr;
 -- decide the next adress for the RAM
 function calculate_next_addr(inst : in instruction_state; din : in decoder_in ) return gb_doubleword is 
 begin
-    if(inst = R_STOP) then
-        return x"0000";
+    if(inst = R_STOP or inst = HALT) then
+        return din.reg.PC;    
     else
-        return  std_logic_vector(unsigned(din.reg.PC) + to_unsigned(1,16));
+        return std_logic_vector(unsigned(din.reg.PC) + to_unsigned(1,16));
     end if;
 end calculate_next_addr;
 
+-- decide the next PC
+function calculate_next_PC(inst : in instruction_state; din : in decoder_in; branch_target : in gb_doubleword ) return gb_doubleword is 
+begin
+    case (inst) is 
+    when HALT => return din.reg.PC;
+    when I_ABS_BRANCH_JMP => return branch_target;
+    when R_STOP => return x"0000";
+    when others => return std_logic_vector(unsigned(din.reg.PC) + to_unsigned(1,16));
+end case;
+end calculate_next_PC;
 -- decide if the instruction state writes to Ram
 function writes_to_ram(inst : instruction_state) return boolean is 
 begin
@@ -311,16 +314,36 @@ else
         -- if next is noop, its not a multiclock instruction
         if(r.next_i = NOOP) then 
             v.inst := decode_instruction_state(i.ram.data);
+            if(is_root_state(r.inst)) then   
+                v.opcode := i.ram.data;
+            end if;
         else 
             v.inst := r.next_i;
         end if;
     end if;
 
-    v.next_i := next_instr(r.inst);
+    if(r.st = sEXEC) then  -- decide branching target
+        --at the time we have ram input with the OP
+        case(r.inst) is 
+        when I_ABS_BRANCH =>  
+            v.do_branch := '1' when should_branch(decode_branch_type(r.opcode),i.alu.flags) else '0';
+        when I_ABS_BRANCH_LD1 =>
+            v.branch_adress(7 downto 0) := i.ram.data;
+        when I_ABS_BRANCH_LD2 =>
+            v.branch_adress(15 downto 8) := i.ram.data;
+        when I_ABS_BRANCH_JMP =>
+            v.branch_adress := r.branch_adress;
+        when others =>
+            v.branch_adress := x"0000";
+            v.do_branch := '0';
+        end case;
+           end if;
+
+    v.next_i := next_instr(r.inst,r.do_branch);
     
 
     -- read registers
-    ov.reg := read_registers(v,i.ram.data);
+    ov.reg := read_registers(v,v.opcode);
 
     -- we write at the write substate if the instruction has writeback
     if((r.st = sWrite) and instruction_has_reg_write(v.inst)) then 
@@ -329,16 +352,12 @@ else
         ov.reg.write_enable := '0';
     end if;
    
-    ov.reg.data := select_reg_data(v.inst, i.reg,i.alu.op_R,  i.ram.data);
+    ov.reg.data := select_reg_data(v.inst, i.reg,i.alu.op_R, i.ram.data);
 
     -- advance the PC at the last state, to be ready for next fetch    
     if(r.st = sWAIT and r.inst /= HALT) then      
-        case (r.inst) is 
-            when HALT => ov.reg.PCIn := i.reg.PC;
-            when R_STOP => ov.reg.PCIn := x"0000";
-            when others => ov.reg.PCIn := std_logic_vector(unsigned(i.reg.PC) + to_unsigned(1,16));
-        end case;
         
+        ov.reg.PCIn := calculate_next_PC(r.inst,i, r.branch_adress);
     elsif (r.st = sSTART) then 
         ov.reg.PCIn := x"0000";        
     else
@@ -349,20 +368,20 @@ else
      -- alu outputs
     ov.alu.mode := instruction_to_alu(v.inst);
     ov.alu.double := '0';    
-    ov.alu.op_A(7 downto 0) := i.reg.data_A;
-
-    if(v.inst = R_ALU_INC or v.inst = R_ALU_DEC)   then 
-        ov.alu.op_B(7 downto 0) := "00000001";
-    else
-        ov.alu.op_B(7 downto 0) := i.reg.data_B;
-    end if;
+    ov.alu.op_A(7 downto 0) := i.reg.data_A;   
+    ov.alu.op_B(7 downto 0) := i.reg.data_B;
     
 
     -- ram outputs
     if(r.st = sSTART) then 
         v.load_adress := x"0000";
     elsif(r.st = sEXEC) then -- calculate next adress at EXEC stage
-        v.load_adress := calculate_next_addr(v.inst,i);
+        if(r.inst = I_ABS_BRANCH_JMP) then 
+            v.load_adress := r.branch_adress;
+        else
+            v.load_adress := calculate_next_addr(v.inst,i);
+        end if;
+       
     end  if;
 
     ov.ram.addr := r.load_adress;
