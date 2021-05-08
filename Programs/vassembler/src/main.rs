@@ -163,7 +163,7 @@ fn parse_label(s : &str, address :&mut u16) -> Result<LabelDeclaration,&'static 
 
 
     let mut labelDecl = LabelDeclaration{
-        name : parsed.to_string(),                
+        name : parsed.replace(" ",""),                
         address : *address
     };
 
@@ -242,9 +242,7 @@ fn parse_jp(line : &str, address:  &mut u16)-> Result<InstructionType,&'static s
                 return Err("Invalid format of jump instruction");
             }
         }
-    }    
-   
-    return Err("Invalid jump instruction");
+    }
 }
 
 fn parse_op_ld(line : &str, address:  &mut u16) -> Result<InstructionType,&'static str> {
@@ -288,8 +286,9 @@ fn parse_op_ld(line : &str, address:  &mut u16) -> Result<InstructionType,&'stat
     }
 }
 
-fn main() {
-    let filename = "D:/FPGA/PGB/Programs/vassembler/starter.vasm";
+fn assemble_file(filename : &str) -> Result<Vec<u8>,String>
+{
+   
     println!("Opening file {}", filename);
     
     let contents = fs::read_to_string(filename)
@@ -333,6 +332,10 @@ fn main() {
                     println!("Error when parsing line {}, {}",s,error);
                 }
             }
+        }
+        else if init == "-" // comment
+        {
+            // literally do nothing
         }
         else //instruction
         {
@@ -407,8 +410,18 @@ fn main() {
                         bytes.push(a.value);
                     },         
                     InstructionType::Jmp(a) => {
-                        let mem = labeladresses[&a.label];
+                        let label =labeladresses.get(&a.label);
+                       
+                        if(label.is_none())
+                        {
+                            println!("Cant load label adress {}", a.label );
 
+                            for (k,v) in labeladresses.iter()
+                            {
+                                println!("labels {} {} ", k,v );
+                            }
+                        }
+                        let mem = label.unwrap();
                         match a.mode  {
                             JumpMode::Imm => {
                                 
@@ -446,10 +459,50 @@ fn main() {
         }   
     }
 
-    let mut i = 0;
-    for b in bytes
-    {
-        println!("{}:  {:#02x}",i,b);
-        i+= 1;
+   return Ok(bytes);
+}
+
+fn main() {
+
+    let files = [
+        "D:/FPGA/PGB/Programs/vassembler/starter.vasm",
+        "D:/FPGA/PGB/Programs/vassembler/microjump.vasm"
+    ];
+
+    let mut finalbytes : Vec<u8> = Vec::new();
+   
+   
+    let program_size = 16;
+
+    finalbytes.resize(program_size * files.len(), 0);
+
+    let mut offset = 0;
+    for f in files.iter(){
+        let bytes = assemble_file(f);      
+
+        let mut i = 0;
+        for b in bytes.unwrap()
+        {
+            println!("{}:  {:#04x}",i,b);
+            i+= 1;
+
+            finalbytes[i + offset] = b;
+        }
+        for n in i..program_size
+        {            
+            println!("{}:  {:#04x}",n,0);
+        }
+
+        offset += program_size;
     }
+
+    let mut vhdlarray = "".to_string();
+
+    for b in finalbytes {
+        let mut byte = format!("{:#04x}\",",b);
+      
+        vhdlarray.push_str(&byte.replace("0x","x\""));
+    }
+
+    println!("{}",vhdlarray);
 }

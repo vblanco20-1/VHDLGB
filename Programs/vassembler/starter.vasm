@@ -1,3 +1,4 @@
+- test comment
 noop
 jmp :main
 jmp nc :main
@@ -8,3 +9,4 @@ $byte v3 = 0x22
 ld b #0xFF
 ld d c
 add a b
+$byte halt = 0x76
