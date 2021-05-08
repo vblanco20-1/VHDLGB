@@ -1,0 +1,9 @@
+- microjump test program. Should keep looping to 0, and write b to 11
+- and never overwrite the A register
+ld a #0x8
+ld b #0x1
+:loop
+sub a b
+jmp nz :loop
+ld b #0x11
+$byte halt = 0x76

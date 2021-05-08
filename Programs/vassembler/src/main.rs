@@ -28,7 +28,7 @@ enum Register{
 #[derive(Debug,PartialEq,Clone)]
 enum AluOP{
     Add,
-    Sub,   
+    Sub,
     None
 }
 
@@ -130,7 +130,7 @@ fn write_AluInstruction(s : &ALUInstruction)-> Result<u8,&'static str > {
     let mut op = 0;
     match s.operation{
         AluOP::Add => {op = 0;},
-        AluOP::Sub => {op = 0;},
+        AluOP::Sub => {op = 2;},
         _ => { return Err("Invalid alu operation");}
     };
     let prefix : u8 = 2;
@@ -466,7 +466,8 @@ fn main() {
 
     let files = [
         "D:/FPGA/PGB/Programs/vassembler/starter.vasm",
-        "D:/FPGA/PGB/Programs/vassembler/microjump.vasm"
+        "D:/FPGA/PGB/Programs/vassembler/microjump.vasm",
+        "D:/FPGA/PGB/Programs/vassembler/microloop.vasm"
     ];
 
     let mut finalbytes : Vec<u8> = Vec::new();
