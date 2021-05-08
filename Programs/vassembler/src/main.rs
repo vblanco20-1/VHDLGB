@@ -2,19 +2,19 @@ use std::env;
 use std::fs;
 use std::collections::HashMap;
 use std::u8;
-
+#[derive(Debug,Clone)]
 struct VariableDeclaration{
     name : String,
     typename : String,
     value : String,
     address: u16
 }
-
+#[derive(Debug,Clone)]
 struct LabelDeclaration{
     name : String,
     address: u16
 }
-#[derive(Debug)]
+#[derive(Debug,Clone)]
 enum Register{
     A,
     B,
@@ -25,46 +25,61 @@ enum Register{
     L,
     None
 }
-#[derive(Debug,PartialEq)]
+#[derive(Debug,PartialEq,Clone)]
 enum AluOP{
     Add,
     Sub,   
     None
 }
-#[derive(Debug)]
+
+#[derive(Debug,PartialEq,Clone)]
+enum JumpMode{
+    Imm,
+    NZ,Z,NC,C
+}
+
+#[derive(Debug,Clone)]
 struct TypeAInstruction{
     regA: Register,
     regB: Register
 }
-#[derive(Debug)]
+#[derive(Debug,Clone)]
 struct Imm8BInstruction{
     regA: Register,
     value: u8
 }
-#[derive(Debug)]
+#[derive(Debug,Clone)]
 struct VariableInstruction{
     regA: Register,
     variable : String
 }
-#[derive(Debug)]
+#[derive(Debug,Clone)]
 struct ALUInstruction{
     reg: Register,
     operation : AluOP
 }
-#[derive(Debug)]
+#[derive(Debug,Clone)]
+struct JumpInstruction{
+    label: String,
+    mode: JumpMode
+}
+
+#[derive(Debug,Clone)]
 enum InstructionType{
+    Noop(),
+    Jmp(JumpInstruction),
     R_LD(TypeAInstruction),
     I_LD(Imm8BInstruction),
     V_LD(VariableInstruction),
     R_ALU(ALUInstruction),
     Other()
 }
-#[derive(Debug)]
+#[derive(Debug,Clone)]
 struct InstructionData{
     inst: InstructionType,
     address: u16
 }
-
+#[derive(Clone)]
 enum Line{
     Instruction(InstructionData),
     Label(LabelDeclaration),
@@ -85,63 +100,193 @@ fn string_to_register(name: &str) -> Register
     }
 }
 
-fn reg_to_u8(r: &Register) -> u8{
-    match r {
-        Register::A => return 7,
-        Register::B => return 0,
-        Register::C => return 1,
-        Register::D => return 2,
-        Register::E => return 3,
-        Register::H => return 4,
-        Register::L => return 5,
-        Register::None => return 0,
+fn reg_to_u8(r: &Register) -> Result<u8,&'static str >{
+   return  match r {
+        Register::A => Ok(7),
+        Register::B => Ok(0),
+        Register::C => Ok(1),
+        Register::D => Ok(2),
+        Register::E => Ok(3),
+        Register::H => Ok(4),
+        Register::L => Ok(5),
+        Register::None => Err("Invalid Register"),
     }
 }
-fn write_registers(s : &TypeAInstruction) -> u8 {
+fn write_registers(s : &TypeAInstruction) -> Result<u8,&'static str > {
     let mut v = 0;
 
-    let ra = reg_to_u8(&s.regA);
-    let rb = reg_to_u8(&s.regB);
+    let ra = reg_to_u8(&s.regA)?;
+    let rb = reg_to_u8(&s.regB)?;
 
     v |= ra << 3;
     v |= rb << 0;
 
-    return v;
+    return Ok(v);
 }
 
-fn write_AluInstruction(s : &ALUInstruction) -> u8 {
-    let mut u = reg_to_u8(&s.reg);
-    let op = match s.operation{
-        AluOP::Add => 0,
-        AluOP::Sub => 2,
-        _ => 7
+fn write_AluInstruction(s : &ALUInstruction)-> Result<u8,&'static str > {
+    let mut u = reg_to_u8(&s.reg)?;
+    
+    let mut op = 0;
+    match s.operation{
+        AluOP::Add => {op = 0;},
+        AluOP::Sub => {op = 0;},
+        _ => { return Err("Invalid alu operation");}
     };
     let prefix : u8 = 2;
 
     u |= op << 3;
     u |= prefix << 6;
-    return u;
+    return Ok(u);
 }
-fn write_RegInstruction(s : &TypeAInstruction,  prefix: u8) -> u8 {
-    let mut u = write_registers(s);
+fn write_RegInstruction(s : &TypeAInstruction, prefix: u8) -> Result<u8,&'static str > {
+    let mut u = write_registers(s)?;
     u |= prefix << 6;
-    return u;
+    return Ok(u);
 }
 
-fn hex_to_u8(s : &str) -> u8 {
+fn hex_to_u8(s : &str) -> Result<u8, std::num::ParseIntError>{
     let without_prefix = s.trim_start_matches("0x");
-    let z = u8::from_str_radix(without_prefix, 16).unwrap();
-    return z;
+    return u8::from_str_radix(without_prefix, 16);  
 }
 
-fn get_alu(s : &str) -> AluOP {
+fn get_alu(s : &str) -> Option<AluOP> {
    return match s {
-       "add" => AluOP::Add,
-       "sub" => AluOP::Add,
-       _ =>  AluOP::None
+       "add" => Some(AluOP::Add),
+       "sub" => Some(AluOP::Sub),
+       _ =>  Option::None
    }
 }
+fn parse_label(s : &str, address :&mut u16) -> Result<LabelDeclaration,&'static str >
+{
+    let parsed = s.strip_prefix(":").ok_or("Error parsing label")?;
 
+
+    let mut labelDecl = LabelDeclaration{
+        name : parsed.to_string(),                
+        address : *address
+    };
+
+    return Ok(labelDecl);           
+}
+
+fn parse_variable(s : &str, address :&mut u16) -> Result<VariableDeclaration,&'static str >
+{
+    let restvar = &s[1..];
+
+    let sections  : Vec<&str> = restvar.split(" ").collect();
+    if sections.len() < 4 
+    {
+        return Err("BAD VARIABLE DECLARATION" );
+    }
+    if sections[0] != "byte" || sections[2] != "=" {
+        return Err("BAD VARIABLE DECLARATION" );
+    }
+    
+    let varname = sections[1];
+    let varvalue = sections[3];            
+  
+    let variableDelc = VariableDeclaration{
+        name : varname.to_string(), 
+        value : varvalue.to_string(), 
+        typename : sections[0].to_string(),
+        address : *address
+    };
+
+    // only bytes now, so +1 on the adresses
+    *address = (*address)+1;
+
+    return Ok(variableDelc);
+}
+
+fn parse_jp(line : &str, address:  &mut u16)-> Result<InstructionType,&'static str> {
+    let sections  : Vec<&str> = line.split(" ").collect();
+
+    let prefixed = sections[1].strip_prefix(":");
+
+    match prefixed {
+        // we are jumping into a label so its immediate mode
+        Some(s) => {
+            let i = JumpInstruction{
+                label: s.to_string(),
+                mode: JumpMode::Imm
+            };
+
+            *address += 3;
+
+            return Ok(InstructionType::Jmp(i));
+        }
+        _ => {
+           let jumpMode =  match sections[1] {
+                "nz" => { Some(JumpMode::NZ)},
+                "z" => {  Some(JumpMode::Z)},
+                "nc" => {  Some(JumpMode::NC)},
+                "c" => {  Some(JumpMode::C)},
+                _ => { None}
+            };  
+
+            let jumpLabel = sections[2].strip_prefix(":");
+            
+            if jumpMode.is_some() && jumpLabel.is_some()
+            {
+                let i = JumpInstruction{
+                    label: jumpLabel.unwrap().to_string(),
+                    mode: jumpMode.unwrap()
+                };
+    
+                *address += 3;
+
+                return Ok(InstructionType::Jmp(i));
+            }
+            else{
+                return Err("Invalid format of jump instruction");
+            }
+        }
+    }    
+   
+    return Err("Invalid jump instruction");
+}
+
+fn parse_op_ld(line : &str, address:  &mut u16) -> Result<InstructionType,&'static str> {
+    let sections  : Vec<&str> = line.split(" ").collect();
+
+    if sections[2].contains("$") // variable ld
+    {        
+        let vars = VariableInstruction{
+            regA: string_to_register(sections[1]),
+            variable : sections[2].strip_prefix("$").unwrap().to_string()
+        };
+
+        *address += 2; // load from memory is a 2 byte instructiuon
+
+        return Ok(InstructionType::V_LD(vars));
+    }
+    else if sections[2].contains("#") // immediate ld
+    {
+
+        let raw = sections[2].strip_prefix("#").unwrap().to_string();
+       
+
+        let vars = Imm8BInstruction{
+            regA: string_to_register(sections[1]),
+            value : hex_to_u8(&raw).unwrap()
+        };
+
+       *address += 2; // load from inst is a 2 byte instructiuon
+
+        return  Ok(InstructionType::I_LD(vars));
+    }
+    else{
+        let vars = TypeAInstruction{
+            regA: string_to_register(sections[1]),
+            regB: string_to_register(sections[2]),
+        };
+
+        *address += 1;
+
+        return  Ok(InstructionType::R_LD(vars));       
+    }
+}
 
 fn main() {
     let filename = "D:/FPGA/PGB/Programs/vassembler/starter.vasm";
@@ -164,50 +309,30 @@ fn main() {
         
         let init = &s[0..1];
         if init == "$" 
-        {
-          
-            let restvar = &s[1..];
+        {            
+            match parse_variable(s,&mut adresscounter) {
+                Ok(v) => {
+                      
+                    variableadresses.insert(v.name.clone(),v.address);       
 
-            let sections  : Vec<&str> = restvar.split(" ").collect();
-            if sections.len() < 4 
-            {
-                println!("BAD VARIABLE DECLARATION {}", s);
+                    lines.push(Line::Variable(v));
+                },
+                Err(error) => {
+                    println!("Error when parsing variable {}, {}",s,error);
+                }
             }
-            if sections[0] != "byte" || sections[2] != "=" {
-                println!("BAD VARIABLE DECLARATION {}", s);
-            }
-            
-            let varname = sections[1];
-            let varvalue = sections[3];            
-          
-            let mut variableDelc = VariableDeclaration{
-                name : varname.to_string(), 
-                value : varvalue.to_string(), 
-                typename : sections[0].to_string(),
-                address : adresscounter
-            };
-
-            // only bytes now, so +1 on the adresses
-            adresscounter = adresscounter+1;
-
-            variableadresses.insert(variableDelc.name.clone(),variableDelc.address);        
-
-            let mut newLine = Line::Variable(variableDelc);           
-            lines.push(newLine);
         }
         else if init == ":" //label 
-        {
-            let mut labelDecl = LabelDeclaration{
-                name : s.strip_prefix(":").unwrap().to_string(),                
-                address : adresscounter
-            };
-
-           
-
-            labeladresses.insert(labelDecl.name.clone(),labelDecl.address);
-
-            let mut newLine = Line::Label(labelDecl);           
-            lines.push(newLine);
+        { 
+            match parse_label(s,&mut adresscounter) {
+                Ok(l) => {
+                    labeladresses.insert(l.name.clone(),l.address);  
+                    lines.push(Line::Label(l));
+                },
+                Err(error) => {
+                    println!("Error when parsing line {}, {}",s,error);
+                }
+            }
         }
         else //instruction
         {
@@ -220,50 +345,12 @@ fn main() {
 
             let aluop = get_alu(sections[0]);
 
-            if(sections[0] == "ld")
-            {
-                if sections[2].contains("$") // variable ld
-                {
-                    let vars = VariableInstruction{
-                        regA: string_to_register(sections[1]),
-                        variable : sections[2].strip_prefix("$").unwrap().to_string()
-                    };
-
-                    inst.inst = InstructionType::V_LD(vars);
-
-                    adresscounter += 2; // load from memory is a 2 byte instructiuon
-                }
-                else if sections[2].contains("#") // immediate ld
-                {
-
-                    let raw = sections[2].strip_prefix("#").unwrap().to_string();
-                   
-
-                    let vars = Imm8BInstruction{
-                        regA: string_to_register(sections[1]),
-                        value : hex_to_u8(&raw)
-                    };
-
-                    inst.inst = InstructionType::I_LD(vars);
-
-                    adresscounter += 2; // load from inst is a 2 byte instructiuon
-                }
-                else{
-                    let vars = TypeAInstruction{
-                        regA: string_to_register(sections[1]),
-                        regB: string_to_register(sections[2]),
-                    };
-
-                    inst.inst = InstructionType::R_LD(vars);
-
-                    adresscounter += 1;
-                }
-            }
-            else if aluop != AluOP::None
+           
+            if aluop.is_some()
             {
                 let regA= string_to_register(sections[1]);
                 let vars = ALUInstruction{
-                    operation: aluop,
+                    operation: aluop.unwrap(),
                     reg: string_to_register(sections[2]),
                 };
 
@@ -271,11 +358,33 @@ fn main() {
 
                 adresscounter += 1;
             }
+            else{
+                match sections[0] {
+                    "ld" => { 
+                        inst.inst = parse_op_ld(s,&mut adresscounter).unwrap();
+                    },
+                    "noop" => {
+
+                        inst.inst = InstructionType::Noop();
+                        adresscounter += 1;
+                    },
+                    "jmp" => {
+                        inst.inst = parse_jp(s,&mut adresscounter).unwrap();
+                    },
+                    _ => { 
+
+                        println!("Unrecognized instruction! {}",sections[0]);
+                    }
+                }
+                
+            }
 
             let mut newLine = Line::Instruction(inst);           
             lines.push(newLine);
         }
     }
+
+    
     
     let mut bytes : Vec<u8> = Vec::new();
 
@@ -286,7 +395,7 @@ fn main() {
                 println!("Instruction: address {}, inst {:?}",i.address,  i.inst );
               
                 match i.inst {
-                    InstructionType::R_LD(a) => bytes.push(write_RegInstruction(&a, 1 )),
+                    InstructionType::R_LD(a) => bytes.push(write_RegInstruction(&a, 1 ).unwrap()),
                     InstructionType::I_LD(a) => 
                     {
                         match a.regA {
@@ -296,8 +405,34 @@ fn main() {
                         }
                         
                         bytes.push(a.value);
-                    },                    
-                    InstructionType::R_ALU(a) => bytes.push(write_AluInstruction(&a)),                                   
+                    },         
+                    InstructionType::Jmp(a) => {
+                        let mem = labeladresses[&a.label];
+
+                        match a.mode  {
+                            JumpMode::Imm => {
+                                
+                                bytes.push(0xC3);
+                                bytes.push((mem & 0xFF) as u8); // LSB
+                                bytes.push(((mem & 0xFF00) >> 2)as u8); // MSB
+                            },
+                            _ => {
+                                bytes.push(
+                                    match a.mode {
+                                        JumpMode::NZ => 0xC2,
+                                        JumpMode::Z=> 0xCA,
+                                        JumpMode::NC=> 0xD2,
+                                        JumpMode::C => 0xDA,                                        
+                                        _ =>0x00
+                                    });
+
+                                bytes.push((mem & 0xFF) as u8); // LSB
+                                bytes.push(((mem & 0xFF00) >> 2)as u8); // MSB
+                            }
+                        }
+
+                    },        
+                    InstructionType::R_ALU(a) => bytes.push(write_AluInstruction(&a).unwrap()),                                   
                     _ => bytes.push(0x00),
                 }
             },
@@ -306,7 +441,7 @@ fn main() {
             },
             Line::Variable(i) => {
                 println!("Variable: address {}, name {}, value {}",i.address, i.name, i.value );
-                bytes.push(hex_to_u8(&i.value));
+                bytes.push(hex_to_u8(&i.value).unwrap());
             }    
         }   
     }

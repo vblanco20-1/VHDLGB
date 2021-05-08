@@ -1,3 +1,6 @@
+noop
+jmp :main
+jmp nc :main
 $byte v1 = 0x12
 $byte v2 = 0x33
 $byte v3 = 0x22 
