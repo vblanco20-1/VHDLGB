@@ -23,6 +23,7 @@ enum Register{
     E,
     H,
     L,
+    MHL,
     None
 }
 #[derive(Debug,PartialEq,Clone)]
@@ -96,6 +97,7 @@ fn string_to_register(name: &str) -> Register
         "h" => return Register::H,
         "e" => return Register::E,
         "l" => return Register::L,
+        "(hl)" => return Register::MHL,
         _ => return Register::None,
     }
 }
@@ -109,6 +111,7 @@ fn reg_to_u8(r: &Register) -> Result<u8,&'static str >{
         Register::E => Ok(3),
         Register::H => Ok(4),
         Register::L => Ok(5),
+        Register::MHL=> Ok(6),
         Register::None => Err("Invalid Register"),
     }
 }
@@ -404,6 +407,8 @@ fn assemble_file(filename : &str) -> Result<Vec<u8>,String>
                         match a.regA {
                             Register::A => bytes.push(0x3E),
                             Register::B => bytes.push(0x06),
+                            Register::H => bytes.push(0x26),
+                            Register::L => bytes.push(0x2E),
                             _ => bytes.push(0x00),
                         }
                         
@@ -467,7 +472,8 @@ fn main() {
     let files = [
         "D:/FPGA/PGB/Programs/vassembler/starter.vasm",
         "D:/FPGA/PGB/Programs/vassembler/microjump.vasm",
-        "D:/FPGA/PGB/Programs/vassembler/microloop.vasm"
+        "D:/FPGA/PGB/Programs/vassembler/microloop.vasm",
+        "D:/FPGA/PGB/Programs/vassembler/microstore.vasm"
     ];
 
     let mut finalbytes : Vec<u8> = Vec::new();
@@ -499,10 +505,16 @@ fn main() {
 
     let mut vhdlarray = "".to_string();
 
+    let mut counter = 0;
     for b in finalbytes {
         let mut byte = format!("{:#04x}\",",b);
       
         vhdlarray.push_str(&byte.replace("0x","x\""));
+        counter+=1;
+        if (counter% 16) == 0
+        {
+            vhdlarray.push_str("\n");
+        }
     }
 
     println!("{}",vhdlarray);

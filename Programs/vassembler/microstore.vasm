@@ -1,0 +1,10 @@
+- microstore test program. should write 33 at adress 1
+noop
+-- 33 will go here
+noop
+noop
+ld h #0x00
+ld l #0x01
+ld b #0x33
+ld (hl) b
+$byte halt = 0x76

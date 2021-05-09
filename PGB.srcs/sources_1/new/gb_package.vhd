@@ -58,6 +58,7 @@ package gb_package is
     B, C,
     D, E,
     H, L,
+    MHL,
     SP,
     One,
     Zero
@@ -68,14 +69,16 @@ package gb_package is
     BC,
     DE,
     HL,
-    SP
+    SP,
+    WideZero
   );
 
   type reg_in is record 
 
     reg_A : reg_name; -- register for output 1
     reg_B : reg_name; -- register for output 2
-   
+    reg_wide : widereg_name; -- register for wide output(read only)
+
     write_enable : std_logic; -- enable writing, to reg A from data
     flag_write : std_logic;
     data :  gb_word; -- data to write to reg-a
@@ -87,6 +90,7 @@ package gb_package is
 
   type reg_out is record 
     data_A, data_B:  gb_word; -- register outputs
+    wide : gb_doubleword;
     PC  : gb_doubleword;
     flags : alu_flags; -- output alu flags
   end record reg_out;
@@ -160,6 +164,7 @@ package gb_package is
   constant zero_reg_in : reg_in := (
     reg_A => Zero, 
     reg_B => Zero, 
+    reg_wide => SP,
     write_enable => '0',
     flag_write => '0',
     data => x"00", 
@@ -169,6 +174,7 @@ package gb_package is
   constant debug_reg_in : reg_in := (
     reg_A => A, 
     reg_B => B, 
+    reg_wide => SP,
     write_enable => '0',
     flag_write => '0',
     data => x"00", 
@@ -178,6 +184,7 @@ package gb_package is
   constant zero_reg_out : reg_out := (
     data_A => x"00", 
     data_B => x"00", 
+    wide => x"0000", 
     PC => x"0000", 
     flags => zero_alu_flags
   );

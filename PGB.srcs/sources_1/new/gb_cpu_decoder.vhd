@@ -49,13 +49,14 @@ architecture Behavioral of gb_decoder is
         inst : instruction_state;
         next_i : instruction_state; -- next instruction. For multiclock
         do_branch : std_logic; -- perform branching
-
+        ramwrite : gb_word; -- temporal buffer for memory write
     end record dec_state;
 
     constant zero_state : dec_state := (    
         load_adress => x"0000",    
         branch_adress => x"0000",  
-        opcode => x"00",  
+        opcode => x"00", 
+        ramwrite => x"00",
         st => sSTART,
         inst => NOOP,
         next_i => NOOP,
@@ -95,7 +96,11 @@ begin
     if(data = x"76") then 
         return HALT;
     else
-        return R_LD; -- prefix 01 is allways reg loads
+        if(dy = "110") then -- (HL), memory write
+            return R_LD_MEM;
+        else
+            return R_LD; -- prefix 01 is reg loads
+        end if;
     end if;
     when "10" => -- 2
    
@@ -201,20 +206,29 @@ begin
     when R_ALU =>    
     ret.reg_A := A; 
     ret.reg_B := decode_registers_basic(dz);
+    ret.reg_wide := WideZero;
     -- inc-dec, allways 1 as B, use it
     when R_ALU_SIMPLE =>    
     ret.reg_A := decode_registers_basic(dy); 
     ret.reg_B := One;
+    ret.reg_wide := WideZero;
     -- R2R LD, takes from y and z
     when R_LD => 
     ret.reg_A := decode_registers_basic(dy); 
     ret.reg_B := decode_registers_basic(dz);
+    ret.reg_wide := WideZero;
     when I_LD_EXEC =>
     ret.reg_A := decode_registers_basic(dy); 
     ret.reg_B := Zero;
+    ret.reg_wide := WideZero;
+    when R_LD_MEM => 
+    ret.reg_A := decode_registers_basic(dz); 
+    ret.reg_B := Zero;
+    ret.reg_wide := HL;
     when others => 
-        ret.reg_B := Zero;
-        ret.reg_B := Zero; -- just default to cero
+    ret.reg_B := Zero;
+    ret.reg_B := Zero; -- just default to cero
+    ret.reg_wide := WideZero;
     end case;
 
     return ret;
@@ -226,6 +240,7 @@ function next_instr(inst : in instruction_state; branch : in std_logic) return i
 begin
     case (inst) is 
     when I_LD_LOAD => return I_LD_EXEC;
+    when R_LD_MEM => return R_LD_MEM_WRITE;
     when I_ABS_BRANCH => return I_ABS_BRANCH_LD1;
     when I_ABS_BRANCH_LD1 => return I_ABS_BRANCH_LD2;
     when I_ABS_BRANCH_LD2 => --once branch address is loaded it decides if branching or not
@@ -255,6 +270,7 @@ function calculate_next_PC(inst : in instruction_state; din : in decoder_in; bra
 begin
     case (inst) is 
     when HALT => return din.reg.PC;
+    when R_LD_MEM => return din.reg.PC; -- when doing mem writes we dont advance PC
     when I_ABS_BRANCH_JMP => return branch_target;
     when R_STOP => return x"0000";
     when others => return std_logic_vector(unsigned(din.reg.PC) + to_unsigned(1,16));
@@ -263,7 +279,10 @@ end calculate_next_PC;
 -- decide if the instruction state writes to Ram
 function writes_to_ram(inst : instruction_state) return boolean is 
 begin
-    return false;
+    case (inst) is 
+    when R_LD_MEM => return true;
+    when others => return false;
+    end case;
 end writes_to_ram;
 
 begin    
@@ -323,7 +342,7 @@ begin
             v.branch_adress := x"0000";
             v.do_branch := '0';
         end case;
-           end if;
+    end if;
 
     v.next_i := next_instr(r.inst,r.do_branch);
     
@@ -398,6 +417,8 @@ begin
     elsif(r.st = sEXEC) then -- calculate next adress at EXEC stage
         if(r.inst = I_ABS_BRANCH_JMP) then 
             v.load_adress := r.branch_adress;
+        elsif (r.inst = R_LD_MEM) then
+            v.load_adress := i.reg.wide; -- HL           
         else
             v.load_adress := calculate_next_addr(v.inst,i);
         end if;
@@ -411,7 +432,7 @@ begin
         ov.ram.we  := '0';
     end if;
      
-    ov.ram.data := x"00";
+    ov.ram.data := i.reg.data_A;
 
     -- clock syncronization. We want the value to update at the wait/exec stages
     if(r.st = sFETCH or r.st = sWAIT) then

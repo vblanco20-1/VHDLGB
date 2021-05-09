@@ -75,25 +75,33 @@ signal tr_idx , tr_saved_idx: std_logic_vector(15 downto 0);
 signal tr_data: gb_word;
 signal tr_nextdata: gb_word;
 signal program_index: std_logic_vector(15 downto 0);
-TYPE mem_type IS ARRAY(0 TO 47) OF gb_word; 
+signal ram_write : std_logic;
+signal ram_write_data: gb_word;
+TYPE mem_type IS ARRAY(0 TO (16*4-1)) OF gb_word; 
 
 
 
 signal test_block_1 : mem_type := (
-  x"00",x"00",x"c3",x"0a",x"00",x"d2",x"0a",x"00",x"12",x"33",x"22",x"06",x"ff",x"51",x"80",x"76", --starter
-  x"00",x"3e",x"11",x"00",x"00",x"c3",x"02",x"00",x"3e",x"ff",x"76",x"00",x"00",x"00",x"00",x"00", -- microjump
-  x"00",x"3e",x"08",x"06",x"01",x"90",x"c2",x"04",x"00",x"06",x"11",x"76",x"00",x"00",x"00",x"00" -- microloop
-  );
+  x"00",x"00",x"c3",x"0a",x"00",x"d2",x"0a",x"00",x"12",x"33",x"22",x"06",x"ff",x"51",x"80",x"76",
+  x"00",x"3e",x"11",x"00",x"00",x"c3",x"02",x"00",x"3e",x"ff",x"76",x"00",x"00",x"00",x"00",x"00",
+  x"00",x"3e",x"08",x"06",x"01",x"90",x"c2",x"04",x"00",x"06",x"11",x"76",x"00",x"00",x"00",x"00",
+  x"00",x"00",x"00",x"00",x"26",x"00",x"2e",x"01",x"06",x"33",x"70",x"76",x"00",x"00",x"00",x"00");
 
 
 begin
 
-ramsync : process (ramclock,tr_nextdata,tr_idx,program_index)
+ramsync : process (ramclock,tr_nextdata,tr_idx,program_index,ram_write,ram_write_data)
+variable widx  : unsigned(15 downto 0);
 begin
   if rising_edge(ramclock) then
       --tr_data <= tr_nextdata;
-      tr_saved_idx(3 downto 0) <= tr_idx(3 downto 0);
-      tr_saved_idx(15 downto 4) <= program_index(11 downto 0);
+      widx(3 downto 0) := unsigned(tr_idx(3 downto 0));
+      widx(15 downto 4) := unsigned(program_index(11 downto 0));
+
+      if(ram_write) then 
+        test_block_1(to_integer(widx)) <= ram_write_data;
+      end if;
+      tr_saved_idx <= std_logic_vector(widx);
 	end if;
 end process;
 
@@ -126,7 +134,8 @@ tr_idx <= decout.ram.addr;
 
 ramclock <= decout.ramclock;
 regin_tb <= debug_reg_in;
-
+ram_write_data <= decout.ram.data;
+ram_write <= decout.ram.we;
 regin <= decout.reg when read_reg = '0' else regin_tb ;
 
 aluin <= decout.alu;
@@ -197,6 +206,22 @@ begin
     wait for 2 ns;
     check_equal( regout.data_A ,std_logic_vector'(x"00"), result("should end loop with a = 0"));   
     check_equal( regout.data_B ,std_logic_vector'(x"11"), result("should end loop with b = x11"));   
+  end if;
+
+  if run("microstore") then --this one should write 33 to adress 1
+    program_index <=  std_logic_vector'(x"0003");
+    read_reg <= '0';
+    wantsclock <= '1';
+    reset <= '1';
+
+    wait for 4 ns;
+    reset <= '0';
+  
+    wait for 160 ns; -- 20 clocks
+    read_reg <= '1';
+  
+    wait for 2 ns;
+    check_equal( test_block_1(49) ,std_logic_vector'(x"33"), result("should end with m1 at x33"));   
   end if;
 
 

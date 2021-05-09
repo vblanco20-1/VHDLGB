@@ -44,6 +44,8 @@ package gb_cu_pkg is
        PREFIX_CD,
        -- register based load
        R_LD,
+       -- register load, but write mem
+       R_LD_MEM, R_LD_MEM_WRITE,
 
        I_LD_LOAD, I_LD_EXEC
     );
@@ -130,7 +132,7 @@ function decode_registers_basic(index: in std_logic_vector(2 downto 0)) return r
       when "011" => return E;
       when "100" => return H;
       when "101" => return L;
-      when "110" => return A; -- this is  for memory loads careful
+      when "110" => return MHL; -- this is  for memory loads careful
       when others => return A; -- "111"
       end case;
   end decode_registers_basic;

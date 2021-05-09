@@ -83,6 +83,30 @@ end case;
 return res;
 end get_register;
 
+function get_wideregister ( regs : in reg_state; name : in widereg_name  ) return gb_doubleword is   
+variable res : gb_doubleword;
+begin      
+   res := x"0000";
+case(name) is
+    when AF => 
+    res(15 downto 8) := regs.A;
+    res(7 downto 0) := regs.F;
+    when BC =>   
+    res(15 downto 8) := regs.B;
+    res(7 downto 0) := regs.C;
+    when DE =>   
+    res(15 downto 8) := regs.D;
+    res(7 downto 0) := regs.E;
+    when HL =>  
+     res(15 downto 8) := regs.H;
+    res(7 downto 0) := regs.L;
+    when SP => res := regs.SP;
+    when others  => res := x"0000";-- Zero is the missing one
+end case;
+
+return res;
+end get_wideregister;
+
 function set_register ( regs : in reg_state; name : in reg_name; data : in gb_word) return reg_state is   
 variable res : reg_state;
 begin      
@@ -165,6 +189,7 @@ else
 
     ov.data_A := get_register(r,i.reg_A);
     ov.data_B := get_register(r,i.reg_B);
+    ov.wide := get_wideregister(r,i.reg_wide);
 
     ov.flags := unpack_flag_reg(r.F);
     ov.PC := r.PC;
