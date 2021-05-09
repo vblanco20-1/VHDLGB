@@ -132,9 +132,8 @@ begin
                 when "001" => return PREFIX_CD;
                 when others => return NOOP;
             end case;
-       -- when "100" => return R_ALU;
-       -- when "101" => return R_ALU;
-       -- when "110" => return I_LD_LOAD; -- inmediate load
+        when "101" => return I_ALU;
+     
         when others => return NOOP;    
     end case;
     
@@ -155,6 +154,9 @@ begin
     -- inc/dec
     when R_ALU_SIMPLE =>    
         return true;
+    --second clock of inmediate alu
+    when I_ALU_LOAD =>    
+        return true;
     -- loads
     when R_LD|I_LD_EXEC => 
         return true;
@@ -170,7 +172,7 @@ function select_reg_data(state : in instruction_state; regdata : in reg_out; alu
 begin
     case (state) is 
     -- simple alus.
-    when R_ALU|R_ALU_SIMPLE =>    
+    when R_ALU|R_ALU_SIMPLE|I_ALU_LOAD =>    
         return aludata(7 downto 0);    
     -- loads
     when R_LD => 
@@ -233,6 +235,7 @@ begin
         else 
             return NOOP; -- if not branching we move to the next pc
         end if;
+    when I_ALU => return I_ALU_LOAD;
     when others => return NOOP;
     end case;
 end next_instr;
@@ -275,14 +278,12 @@ comb: process(i,reset,r)
 variable v : dec_state;
 variable ov : decoder_out;
 variable op : split_opcode;
+variable sg : cpu_op_signals;
 begin
 
     v := r;
     ov := zero_decoder_out;
 
-if reset = '1' then 
-    v := zero_state;
-else 
     v.st := next_cpu_state(r.st);
 
     -- read instruction
@@ -299,16 +300,19 @@ else
     end if;
 
     op := read_op(v.opcode);
+    sg := decode_op(op);
 
     if(r.st = sEXEC) then  -- decide branching target
         --at the time we have ram input with the OP
         case(r.inst) is 
         when I_ABS_BRANCH =>  
-            if should_branch(decode_branch_type(v.opcode),i.reg.flags) then 
+            --if should_branch(decode_branch_type(v.opcode),i.reg.flags) then
+            if should_branch(sg.cond,i.reg.flags) then 
+              
                  v.do_branch := '1';
             else
                  v.do_branch := '0';
-            end if;           
+            end if;
         when I_ABS_BRANCH_LD1 =>
             v.branch_adress(7 downto 0) := i.ram.data;
         when I_ABS_BRANCH_LD2 =>
@@ -356,8 +360,8 @@ else
     ov.reg.flags := i.alu.flags; 
 
      -- alu mode 
-    if r.inst = R_ALU then 
-        ov.alu.mode := decode_alu_mode(op.y);
+    if r.inst = R_ALU or r.inst = I_ALU_LOAD then 
+        ov.alu.mode := sg.alu_op;--decode_alu_mode(op.y);
         
         if(op.y = "001" or op.y = "011") then
             ov.alu.with_carry := '1' and i.reg.flags.full_carry;
@@ -367,7 +371,7 @@ else
     elsif r.inst = R_ALU_SIMPLE then 
         case (op.z) is 
             when "100" => ov.alu.mode := o_ADD; -- inc
-            when "101" => ov.alu.mode := o_SUB; --sub
+            when "101" => ov.alu.mode := o_SUB; -- sub
             when others => ov.alu.mode := o_OR;
         end case;  
 
@@ -377,9 +381,16 @@ else
         ov.alu.mode := o_OR;
     end if;
    
+
     ov.alu.double := '0';
     ov.alu.op_A(7 downto 0) := i.reg.data_A;
-    ov.alu.op_B(7 downto 0) := i.reg.data_B;
+
+    -- inmediate alu has the op from RAM
+    if(r.inst = I_ALU_LOAD) then 
+        ov.alu.op_B(7 downto 0) := i.ram.data;
+    else
+        ov.alu.op_B(7 downto 0) := i.reg.data_B;
+    end if;
 
     -- ram outputs
     if(r.st = sSTART) then 
@@ -402,17 +413,20 @@ else
      
     ov.ram.data := x"00";
 
-    
-
     -- clock syncronization. We want the value to update at the wait/exec stages
     if(r.st = sFETCH or r.st = sWAIT) then
         ov.ramclock := '1';
     else
         ov.ramclock := '0';
     end if;
+
+ 
+if reset = '1' then
+rin <= zero_state;
+else 
+rin <= v;
 end if;
 
-rin <= v;
 o <= ov;
 end process;
 

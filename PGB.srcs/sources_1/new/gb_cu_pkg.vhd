@@ -36,6 +36,8 @@ package gb_cu_pkg is
        -- for dec/inc
        R_ALU_SIMPLE,   
 
+      -- inmediate alu
+       I_ALU, I_ALU_LOAD, 
       -- control flow
       I_ABS_BRANCH, I_ABS_BRANCH_LD1 , I_ABS_BRANCH_LD2, I_ABS_BRANCH_JMP, -- absulte 16 bit branch 
 
@@ -71,11 +73,23 @@ package gb_cu_pkg is
         q : std_logic;
   end record split_opcode;
 
+  -- these map directly into the opcode table. 
+  -- all of them  decoded just from opcode
+  type cpu_op_signals is record    
+  alu_op : alu_operation;
+  ry : reg_name;
+  rz : reg_name;
+  rp2 : widereg_name;
+  rp : widereg_name;
+  cond : branch_mode;
+  end record cpu_op_signals;
+
+
   function decode_alu_mode(op : std_logic_vector(2 downto 0)) return alu_operation;
   function read_op(op : in gb_word) return split_opcode;
+  function decode_op(op : in split_opcode) return cpu_op_signals;
   function is_root_state(inst : instruction_state) return boolean;
   function writes_flags(inst : instruction_state) return boolean;
-  function decode_branch_type(op : in gb_word) return branch_mode;
   function should_branch(m : in branch_mode; flags : in alu_flags) return boolean;
   function next_cpu_state (s : in cpu_state ) return cpu_state;
   function decode_registers_basic(index: in std_logic_vector(2 downto 0)) return reg_name;
@@ -146,7 +160,7 @@ function decode_registers_basic(index: in std_logic_vector(2 downto 0)) return r
   begin 
   case (inst) is
     -- alu allways writes flags
-    when R_ALU => 
+    when R_ALU|R_ALU_SIMPLE|I_ALU_LOAD => 
       return true;       
     when others => return false;
   end case;
@@ -167,19 +181,46 @@ function decode_registers_basic(index: in std_logic_vector(2 downto 0)) return r
   end decode_alu_mode;
 
 
+  function decode_op(op : in split_opcode) return cpu_op_signals is 
+  variable v: cpu_op_signals;
 
-  function decode_branch_type(op : in gb_word) return branch_mode is 
   begin
-    case (op) is 
-          when x"C2" => return bNZ;
-          when x"CA" => return bZ;
-          when x"D2" => return bNC;
-          when x"DA" => return bC;
 
-          when x"C3" => return bAll;
-          when others => return bNever;
+    v.alu_op := decode_alu_mode(op.y);
+    v.ry := decode_registers_basic(op.y);
+    v.rz := decode_registers_basic(op.z);
+
+    case op.p is
+      when "00" => 
+      v.rp2 := BC;
+      v.rp := BC;
+      when "01" => 
+      v.rp2 := DE;
+      v.rp := DE;
+      when "10" => 
+      v.rp2 := HL;
+      v.rp := HL;
+      when others =>
+      v.rp2 := AF;
+      v.rp := SP;    
     end case;
+   
 
-  end decode_branch_type;
+    if(op.z(0) = '0') then 
+      case op.y(1 downto 0) is
+        when "00" => 
+        v.cond := bNZ;
+        when "01" => 
+        v.cond := bZ;
+        when "10" => 
+        v.cond := bNC;
+        when others =>
+        v.cond := bC;
+      end case;
+    else
+      v.cond := bAll;
+    end if;
 
+    return v;
+  end decode_op;
 end gb_cu_pkg;

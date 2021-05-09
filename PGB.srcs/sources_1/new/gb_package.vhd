@@ -63,6 +63,14 @@ package gb_package is
     Zero
   );
 
+  type widereg_name is (
+    AF,
+    BC,
+    DE,
+    HL,
+    SP
+  );
+
   type reg_in is record 
 
     reg_A : reg_name; -- register for output 1

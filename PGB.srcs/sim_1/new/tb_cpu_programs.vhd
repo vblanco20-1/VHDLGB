@@ -75,14 +75,15 @@ signal tr_idx , tr_saved_idx: std_logic_vector(15 downto 0);
 signal tr_data: gb_word;
 signal tr_nextdata: gb_word;
 signal program_index: std_logic_vector(15 downto 0);
-TYPE mem_type IS ARRAY(0 TO 31) OF gb_word; 
+TYPE mem_type IS ARRAY(0 TO 47) OF gb_word; 
 
 
 
 signal test_block_1 : mem_type := (
-x"00",x"00",x"c3",x"0a",x"00",x"d2",x"0a",x"00",x"12",x"33",x"22",x"06",x"ff",x"51",x"80",x"76", --starter
-x"00",x"3e",x"11",x"00",x"00",x"c3",x"02",x"00",x"3e",x"ff",x"76",x"00",x"00",x"00",x"00",x"00"  --microjump
-);
+  x"00",x"00",x"c3",x"0a",x"00",x"d2",x"0a",x"00",x"12",x"33",x"22",x"06",x"ff",x"51",x"80",x"76", --starter
+  x"00",x"3e",x"11",x"00",x"00",x"c3",x"02",x"00",x"3e",x"ff",x"76",x"00",x"00",x"00",x"00",x"00", -- microjump
+  x"00",x"3e",x"08",x"06",x"01",x"90",x"c2",x"04",x"00",x"06",x"11",x"76",x"00",x"00",x"00",x"00" -- microloop
+  );
 
 
 begin
@@ -180,6 +181,24 @@ begin
     wait for 2 ns;
     check_equal( regout.data_A ,std_logic_vector'(x"11"), result("SHould give x11"));   
   end if;
+
+  if run("microloop") then --this one should constantly loop
+    program_index <=  std_logic_vector'(x"0002");
+    read_reg <= '0';
+    wantsclock <= '1';
+    reset <= '1';
+
+    wait for 4 ns;
+    reset <= '0';
+  
+    wait for 800 ns; -- 100 clocks
+    read_reg <= '1';
+  
+    wait for 2 ns;
+    check_equal( regout.data_A ,std_logic_vector'(x"00"), result("should end loop with a = 0"));   
+    check_equal( regout.data_B ,std_logic_vector'(x"11"), result("should end loop with b = x11"));   
+  end if;
+
 
 
 
