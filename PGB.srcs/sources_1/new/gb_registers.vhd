@@ -95,8 +95,7 @@ case(name) is
     when D => res.D :=  data;
     when E => res.E :=  data;
     when H => res.H :=  data;
-    when L => res.L :=  data;    
-    when SP => res.SP := data;
+    when L => res.L :=  data;        
     when others  => res.A := regs.A; -- dummy. never happens
 end case;
 
@@ -157,10 +156,9 @@ else
     end if;
 
     -- we allways update the flag register on the clock unless its being overwritten manually
-    
-    --if( not (i.write_enable = '1' and (i.reg_A = F) )) then
+    if( i.flag_write = '1') then
         v.F := pack_flag_reg(i.flags);
-    --end if;
+    end if;
 
     -- PC updates every clock
     v.PC := i.PCin;

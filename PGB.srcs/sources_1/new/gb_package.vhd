@@ -69,7 +69,7 @@ package gb_package is
     reg_B : reg_name; -- register for output 2
    
     write_enable : std_logic; -- enable writing, to reg A from data
-
+    flag_write : std_logic;
     data :  gb_word; -- data to write to reg-a
     flags : alu_flags; -- input alu flags
     PCin : gb_doubleword; -- PC register in
@@ -153,6 +153,7 @@ package gb_package is
     reg_A => Zero, 
     reg_B => Zero, 
     write_enable => '0',
+    flag_write => '0',
     data => x"00", 
     flags => zero_alu_flags,
     PCin => x"0000"
@@ -161,6 +162,7 @@ package gb_package is
     reg_A => A, 
     reg_B => B, 
     write_enable => '0',
+    flag_write => '0',
     data => x"00", 
     flags => zero_alu_flags,
     PCin => x"0000"

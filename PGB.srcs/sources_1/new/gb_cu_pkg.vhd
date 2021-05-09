@@ -32,17 +32,9 @@ package gb_cu_pkg is
        NOOP, HALT,R_STOP,
 
        -- simple register alus. Always stores on A
-       R_ALU_ADD,
-       R_ALU_ADC,
-       R_ALU_SUB,
-       R_ALU_SBC,
-       R_ALU_AND,
-       R_ALU_OR,
-       R_ALU_XOR,
-       -- inc/dec alus
-       R_ALU_INC,
-       R_ALU_DEC,
-        
+       R_ALU,  
+       -- for dec/inc
+       R_ALU_SIMPLE,   
 
       -- control flow
       I_ABS_BRANCH, I_ABS_BRANCH_LD1 , I_ABS_BRANCH_LD2, I_ABS_BRANCH_JMP, -- absulte 16 bit branch 
@@ -68,8 +60,21 @@ package gb_cu_pkg is
     bZ,
     bNC,
     bC
-);
+  );
+
+  type split_opcode is record    
+        prefix : std_logic_vector(1 downto 0);    
+        y : std_logic_vector(2 downto 0);    
+        z : std_logic_vector(2 downto 0); 
+
+        p : std_logic_vector(1 downto 0);
+        q : std_logic;
+  end record split_opcode;
+
+  function decode_alu_mode(op : std_logic_vector(2 downto 0)) return alu_operation;
+  function read_op(op : in gb_word) return split_opcode;
   function is_root_state(inst : instruction_state) return boolean;
+  function writes_flags(inst : instruction_state) return boolean;
   function decode_branch_type(op : in gb_word) return branch_mode;
   function should_branch(m : in branch_mode; flags : in alu_flags) return boolean;
   function next_cpu_state (s : in cpu_state ) return cpu_state;
@@ -78,6 +83,17 @@ package gb_cu_pkg is
 end package gb_cu_pkg;
 
 package body gb_cu_pkg is 
+
+function read_op(op : in gb_word) return split_opcode is 
+variable v: split_opcode;
+begin   
+  v.prefix := op(7 downto 6);
+  v.y := op(5 downto 3);
+  v.z := op(2 downto 0);
+  v.p := op(5 downto 4);
+  v.q := op(3);  
+return v;
+end read_op;
 
 function next_cpu_state (s : in cpu_state ) return cpu_state is   
 begin     
@@ -125,6 +141,32 @@ function decode_registers_basic(index: in std_logic_vector(2 downto 0)) return r
     when others => return true; -- for All, allways branch
   end case;
   end is_root_state;
+
+  function writes_flags(inst : instruction_state) return boolean is 
+  begin 
+  case (inst) is
+    -- alu allways writes flags
+    when R_ALU => 
+      return true;       
+    when others => return false;
+  end case;
+  end writes_flags;
+
+  function decode_alu_mode(op : std_logic_vector(2 downto 0)) return alu_operation is 
+  begin 
+  case (op) is
+   when "000" => return o_ADD;
+   when "001" => return o_ADD;
+   when "010" => return o_SUB;
+   when "011" => return o_SUB;
+   when "100" => return o_AND;
+   when "101" => return o_XOR;
+   when "110" => return o_OR;
+   when others => return o_SUB;
+  end case;
+  end decode_alu_mode;
+
+
 
   function decode_branch_type(op : in gb_word) return branch_mode is 
   begin

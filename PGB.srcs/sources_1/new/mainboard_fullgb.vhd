@@ -197,6 +197,7 @@ fb_write(1 downto 0) <= pix_out;
 	write=>output_enable
 );
 ram_clock <= decout.ramclock;--draw_clock;
+draw_clock <= ram_clock;
 rsprites : gb_tetrissprites_rom port map (draw_clock,sprite_addr,sprite_data);
 rtiles : gb_tetrismap_rom port map (draw_clock,tile_addr,map_data);
 
@@ -252,6 +253,6 @@ vga: gb_display port map (
 );
  
 
-div1: clk_divider generic map (N => 2) port map (clk=> clk_source,  reset=>reset,clk_out=> draw_clock);
+--div1: clk_divider generic map (N => 2) port map (clk=> clk_source,  reset=>reset,clk_out=> draw_clock);
 div2: clk_divider generic map (N => 3) port map (clk=> clk_source,  reset=>reset,clk_out=> pixel_clock);
 end Behavioral;

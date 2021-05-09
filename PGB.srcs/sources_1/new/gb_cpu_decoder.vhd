@@ -60,29 +60,9 @@ architecture Behavioral of gb_decoder is
         inst => NOOP,
         next_i => NOOP,
         do_branch => '0'
-      );
+    );
 
     signal r,rin : dec_state;
-
-    
-
---calculate the correct alu operation according to a given instruction state
-function instruction_to_alu(state : in instruction_state) return alu_operation is
-begin
-    case (state) is 
-    when R_ALU_ADD => return o_ADD;
-    when R_ALU_ADC => return o_ADD;
-    when R_ALU_SUB => return o_SUB;
-    when R_ALU_SBC => return o_SUB;
-    when R_ALU_AND => return o_AND;
-    when R_ALU_OR => return o_OR;
-    when R_ALU_XOR => return o_XOR;
-    
-    when R_ALU_INC => return o_ADD;
-    when R_ALU_DEC => return o_SUB;
-    when others => return o_OR; -- just default to OR when nothing happens
-    end case;
-end instruction_to_alu;
 
 -- decode an instruction to find the first cpu state to go. 
 function decode_instruction_state(data : in gb_word) return instruction_state is
@@ -105,8 +85,8 @@ begin
         when "001" => return NOOP;
         when "010" => return NOOP;
         when "011" => return NOOP;
-        when "100" => return R_ALU_INC;
-        when "101" => return R_ALU_DEC;
+        when "100" => return R_ALU_SIMPLE;
+        when "101" => return R_ALU_SIMPLE;
         when "110" => return I_LD_LOAD; -- inmediate load
         when others => return NOOP;    
     end case;
@@ -120,13 +100,13 @@ begin
     when "10" => -- 2
    
     case (dy) is -- alu operations
-        when "000" => return R_ALU_ADD;
-        when "001" => return R_ALU_ADC;
-        when "010" => return R_ALU_SUB;
-        when "011" => return R_ALU_SBC;
-        when "100" => return R_ALU_AND;
-        when "101" => return R_ALU_XOR;
-        when "110" => return R_ALU_OR;
+        when "000" => return R_ALU;
+        when "001" => return R_ALU;
+        when "010" => return R_ALU;
+        when "011" => return R_ALU;
+        when "100" => return R_ALU;
+        when "101" => return R_ALU;
+        when "110" => return R_ALU;
         when others => return PREFIX_CD;    
     end case;
 
@@ -152,9 +132,9 @@ begin
                 when "001" => return PREFIX_CD;
                 when others => return NOOP;
             end case;
-        when "100" => return R_ALU_INC;
-        when "101" => return R_ALU_DEC;
-        when "110" => return I_LD_LOAD; -- inmediate load
+       -- when "100" => return R_ALU;
+       -- when "101" => return R_ALU;
+       -- when "110" => return I_LD_LOAD; -- inmediate load
         when others => return NOOP;    
     end case;
     
@@ -170,10 +150,10 @@ function instruction_has_reg_write(state : in instruction_state) return boolean 
 begin
     case (state) is 
     -- simple alus.
-    when R_ALU_ADD|R_ALU_ADC|R_ALU_SUB|R_ALU_SBC|R_ALU_AND|R_ALU_OR|R_ALU_XOR =>    
+    when R_ALU =>    
         return true;
     -- inc/dec
-    when R_ALU_INC|R_ALU_DEC =>    
+    when R_ALU_SIMPLE =>    
         return true;
     -- loads
     when R_LD|I_LD_EXEC => 
@@ -190,11 +170,8 @@ function select_reg_data(state : in instruction_state; regdata : in reg_out; alu
 begin
     case (state) is 
     -- simple alus.
-    when R_ALU_ADD|R_ALU_ADC|R_ALU_SUB|R_ALU_SBC|R_ALU_AND|R_ALU_OR|R_ALU_XOR =>    
-        return aludata(7 downto 0);
-    -- inc/dec.
-    when R_ALU_INC|R_ALU_DEC =>    
-    return aludata(7 downto 0);
+    when R_ALU|R_ALU_SIMPLE =>    
+        return aludata(7 downto 0);    
     -- loads
     when R_LD => 
         return regdata.data_B;
@@ -219,13 +196,11 @@ begin
 
     case (state.inst) is 
     -- simple alus. They allways use reg_A
-    when R_ALU_ADD|R_ALU_ADC|R_ALU_SUB|R_ALU_SBC|R_ALU_AND|R_ALU_OR|R_ALU_XOR =>
-    
+    when R_ALU =>    
     ret.reg_A := A; 
     ret.reg_B := decode_registers_basic(dz);
-
     -- inc-dec, allways 1 as B, use it
-    when R_ALU_INC|R_ALU_DEC =>    
+    when R_ALU_SIMPLE =>    
     ret.reg_A := decode_registers_basic(dy); 
     ret.reg_B := One;
     -- R2R LD, takes from y and z
@@ -299,6 +274,7 @@ end process;
 comb: process(i,reset,r)
 variable v : dec_state;
 variable ov : decoder_out;
+variable op : split_opcode;
 begin
 
     v := r;
@@ -314,7 +290,7 @@ else
         -- if next is noop, its not a multiclock instruction
         if(r.next_i = NOOP) then 
             v.inst := decode_instruction_state(i.ram.data);
-            if(is_root_state(r.inst)) then   
+            if(is_root_state(v.inst)) then   
                 v.opcode := i.ram.data;
             end if;
         else 
@@ -322,11 +298,17 @@ else
         end if;
     end if;
 
+    op := read_op(v.opcode);
+
     if(r.st = sEXEC) then  -- decide branching target
         --at the time we have ram input with the OP
         case(r.inst) is 
         when I_ABS_BRANCH =>  
-            v.do_branch := '1' when should_branch(decode_branch_type(r.opcode),i.alu.flags) else '0';
+            if should_branch(decode_branch_type(v.opcode),i.reg.flags) then 
+                 v.do_branch := '1';
+            else
+                 v.do_branch := '0';
+            end if;           
         when I_ABS_BRANCH_LD1 =>
             v.branch_adress(7 downto 0) := i.ram.data;
         when I_ABS_BRANCH_LD2 =>
@@ -347,9 +329,16 @@ else
 
     -- we write at the write substate if the instruction has writeback
     if((r.st = sWrite) and instruction_has_reg_write(v.inst)) then 
-        ov.reg.write_enable := '1';
+        ov.reg.write_enable := '1';        
     else
         ov.reg.write_enable := '0';
+    end if;
+
+    -- we have write enabled for flags at the exec stage to match the alu output
+    iF(r.st = sExec and writes_flags(r.inst)) then 
+        ov.reg.flag_write  := '1';  
+    else 
+        ov.reg.flag_write := '0';
     end if;
    
     ov.reg.data := select_reg_data(v.inst, i.reg,i.alu.op_R, i.ram.data);
@@ -363,14 +352,34 @@ else
     else
         ov.reg.PCIn := i.reg.PC;
     end if;
+
     ov.reg.flags := i.alu.flags; 
 
-     -- alu outputs
-    ov.alu.mode := instruction_to_alu(v.inst);
-    ov.alu.double := '0';    
-    ov.alu.op_A(7 downto 0) := i.reg.data_A;   
+     -- alu mode 
+    if r.inst = R_ALU then 
+        ov.alu.mode := decode_alu_mode(op.y);
+        
+        if(op.y = "001" or op.y = "011") then
+            ov.alu.with_carry := '1' and i.reg.flags.full_carry;
+        else
+            ov.alu.with_carry := '0';
+        end if;
+    elsif r.inst = R_ALU_SIMPLE then 
+        case (op.z) is 
+            when "100" => ov.alu.mode := o_ADD; -- inc
+            when "101" => ov.alu.mode := o_SUB; --sub
+            when others => ov.alu.mode := o_OR;
+        end case;  
+
+        ov.alu.with_carry := '0';
+    else
+        ov.alu.with_carry := '0';
+        ov.alu.mode := o_OR;
+    end if;
+   
+    ov.alu.double := '0';
+    ov.alu.op_A(7 downto 0) := i.reg.data_A;
     ov.alu.op_B(7 downto 0) := i.reg.data_B;
-    
 
     -- ram outputs
     if(r.st = sSTART) then 
@@ -381,7 +390,6 @@ else
         else
             v.load_adress := calculate_next_addr(v.inst,i);
         end if;
-       
     end  if;
 
     ov.ram.addr := r.load_adress;
@@ -394,11 +402,7 @@ else
      
     ov.ram.data := x"00";
 
-    if(v.inst = R_ALU_ADC or v.inst = R_ALU_ADC) then
-        ov.alu.with_carry := '1' and i.reg.flags.full_carry;
-    else
-        ov.alu.with_carry := '0';
-    end if;
+    
 
     -- clock syncronization. We want the value to update at the wait/exec stages
     if(r.st = sFETCH or r.st = sWAIT) then
