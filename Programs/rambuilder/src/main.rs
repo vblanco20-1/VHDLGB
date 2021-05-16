@@ -4,18 +4,19 @@ use std::u8;
 
 
 fn main() {
-    let file = "D:/FPGA/PGB/Programs/rambuilder/tetris_vram.dump";
+    //let file = "D:/FPGA/PGB/Programs/rambuilder/tetris_vram.dump";
+    let file = "D:/FPGA/PGB/Programs/rambuilder/snake.dump";
 
-    let template = "D:/FPGA/PGB/Programs/rambuilder/blockram_template.vhd";
+    let template = "D:/FPGA/PGB/Programs/rambuilder/blockram_template_32k.vhd";
 
-    let output = "D:/FPGA/PGB/Programs/rambuilder/tetris_vram.vhd";
+    let output = "D:/FPGA/PGB/Programs/rambuilder/snake_rom.vhd";
 
     let data_contents = fs::read(file).expect("File not found");
 
     let template_code = fs::read_to_string(template).expect("File not found");
 
     let ramsize = data_contents.len();
-    let ramname = "tetris_vram";
+    let ramname = "snake_ram";
 
     let mut datavhdl = "".to_string();
 

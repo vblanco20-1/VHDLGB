@@ -2,9 +2,12 @@
 noop
 -- 33 will go here
 noop
+-- 44 will go here
 noop
 ld h #0x00
 ld l #0x01
 ld b #0x33
 ld (hl) b
+inc l
+ld (hl) #0x44
 $byte halt = 0x76

@@ -10,6 +10,12 @@ struct VariableDeclaration{
     address: u16
 }
 #[derive(Debug,Clone)]
+struct ConstantDeclaration{
+    name : String,
+    typename : String,
+    value : String
+}
+#[derive(Debug,Clone)]
 struct LabelDeclaration{
     name : String,
     address: u16
@@ -30,6 +36,7 @@ enum Register{
 enum AluOP{
     Add,
     Sub,
+    Inc,
     None
 }
 
@@ -131,12 +138,23 @@ fn write_AluInstruction(s : &ALUInstruction)-> Result<u8,&'static str > {
     let mut u = reg_to_u8(&s.reg)?;
     
     let mut op = 0;
+
+    let prefix : u8 = 2;
+
     match s.operation{
         AluOP::Add => {op = 0;},
-        AluOP::Sub => {op = 2;},
-        _ => { return Err("Invalid alu operation");}
+        AluOP::Sub => {op = 2;},    
+        AluOP::Inc => {
+            let incprefix : u8 = 0;
+            let z : u8 = 4;
+            op = z;
+            op |= incprefix << 6;
+            op |= u << 3;
+            return Ok(op);
+        },    
+        _ => {return Err("Invalid alu operation");}
     };
-    let prefix : u8 = 2;
+    
 
     u |= op << 3;
     u |= prefix << 6;
@@ -157,6 +175,7 @@ fn get_alu(s : &str) -> Option<AluOP> {
    return match s {
        "add" => Some(AluOP::Add),
        "sub" => Some(AluOP::Sub),
+       "inc" => Some(AluOP::Inc),
        _ =>  Option::None
    }
 }
@@ -299,6 +318,7 @@ fn assemble_file(filename : &str) -> Result<Vec<u8>,String>
 
     let mut variableadresses : HashMap<String, u16> = HashMap::new();
     let mut labeladresses : HashMap<String, u16> = HashMap::new();
+    let mut constants : HashMap<String, ConstantDeclaration> = HashMap::new();
     let mut varvalues : Vec<u8> = Vec::new();
 
     let mut lines : Vec<Line> = Vec::new();
@@ -307,20 +327,45 @@ fn assemble_file(filename : &str) -> Result<Vec<u8>,String>
     // scan everything
 
 
-    for mut s in contents.lines() {
+    for sln in contents.lines() {
         
+       
+
+        let mut s = &sln.to_lowercase();
+
+        if s.len() < 2{ continue; }
+
         let init = &s[0..1];
-        if init == "$" 
+        if init == "$"
         {            
             match parse_variable(s,&mut adresscounter) {
                 Ok(v) => {
-                      
+                                       
                     variableadresses.insert(v.name.clone(),v.address);       
 
                     lines.push(Line::Variable(v));
                 },
                 Err(error) => {
                     println!("Error when parsing variable {}, {}",s,error);
+                }
+            }
+        }
+        else if init == "#"
+        {            
+            let mut fakecounter = adresscounter;
+            match parse_variable(s,&mut fakecounter) {
+                Ok(v) => {
+                    
+                    let decl = ConstantDeclaration{
+                        name : v.name,
+                        typename : v.typename,
+                        value : v.value
+                    };
+                    
+                    constants.insert(decl.name.clone(),decl);
+                },
+                Err(error) => {
+                    println!("Error when parsing constant {}, {}",s,error);
                 }
             }
         }
@@ -347,27 +392,66 @@ fn assemble_file(filename : &str) -> Result<Vec<u8>,String>
                 inst : InstructionType::Other()
             };
 
-            let sections  : Vec<&str> = s.split(" ").collect();
+            
+
+            let mut newline = "".to_string();
+            for sec in s.to_lowercase().split(" ") {
+                if sec.len() > 1 && &sec[0..1] == "$" 
+                {
+                   let varname = sec.strip_prefix("$").unwrap().to_string();
+                   match constants.get(&varname) 
+                   {
+                       Some(cons) => {
+                            newline.push_str(&format!("#{} ",&cons.value));
+                       }
+                       ,
+                       None => {
+                            newline.push_str(&format!("{} ",sec));
+                       }
+                   }
+                }
+                else{
+                    newline.push_str(&format!("{} ",sec));
+                }
+            }
+
+            println!(" line {}",newline);
+            let sections  : Vec<&str> = newline.split(" ").collect();
 
             let aluop = get_alu(sections[0]);
-
            
             if aluop.is_some()
             {
                 let regA= string_to_register(sections[1]);
-                let vars = ALUInstruction{
-                    operation: aluop.unwrap(),
-                    reg: string_to_register(sections[2]),
-                };
 
-                inst.inst = InstructionType::R_ALU(vars);
+                let op = aluop.unwrap();
+                if  op == AluOP::Inc {
+                    let vars = ALUInstruction{
+                        operation: op,
+                        reg: regA,
+                    };
+    
+                    inst.inst = InstructionType::R_ALU(vars);
+    
+                    adresscounter += 1;
+                }
+                else{
+                    let vars = ALUInstruction{
+                        operation: op,
+                        reg: string_to_register(sections[2]),
+                    };
+    
+                    inst.inst = InstructionType::R_ALU(vars);
+    
+                    adresscounter += 1;
 
-                adresscounter += 1;
+                }
+                
             }
             else{
                 match sections[0] {
                     "ld" => { 
-                        inst.inst = parse_op_ld(s,&mut adresscounter).unwrap();
+                        inst.inst = parse_op_ld(&newline,&mut adresscounter).unwrap();
                     },
                     "noop" => {
 
@@ -375,7 +459,7 @@ fn assemble_file(filename : &str) -> Result<Vec<u8>,String>
                         adresscounter += 1;
                     },
                     "jmp" => {
-                        inst.inst = parse_jp(s,&mut adresscounter).unwrap();
+                        inst.inst = parse_jp(&newline,&mut adresscounter).unwrap();
                     },
                     _ => { 
 
@@ -409,6 +493,7 @@ fn assemble_file(filename : &str) -> Result<Vec<u8>,String>
                             Register::B => bytes.push(0x06),
                             Register::H => bytes.push(0x26),
                             Register::L => bytes.push(0x2E),
+                            Register::MHL=> bytes.push(0x36),
                             _ => bytes.push(0x00),
                         }
                         
@@ -470,16 +555,17 @@ fn assemble_file(filename : &str) -> Result<Vec<u8>,String>
 fn main() {
 
     let files = [
-        "D:/FPGA/PGB/Programs/vassembler/starter.vasm",
-        "D:/FPGA/PGB/Programs/vassembler/microjump.vasm",
-        "D:/FPGA/PGB/Programs/vassembler/microloop.vasm",
-        "D:/FPGA/PGB/Programs/vassembler/microstore.vasm"
+        //"D:/FPGA/PGB/Programs/vassembler/starter.vasm",
+        //"D:/FPGA/PGB/Programs/vassembler/microjump.vasm",
+       // "D:/FPGA/PGB/Programs/vassembler/microloop.vasm",
+        "D:/FPGA/PGB/Programs/vassembler/microstore.vasm",
+        //"D:/FPGA/PGB/Programs/vassembler/snake.vasm"
     ];
 
     let mut finalbytes : Vec<u8> = Vec::new();
    
    
-    let program_size = 16;
+    let program_size = 256;
 
     finalbytes.resize(program_size * files.len(), 0);
 
@@ -504,6 +590,8 @@ fn main() {
     }
 
     let mut vhdlarray = "".to_string();
+
+   // fs::write("D:/FPGA/PGB/Programs/rambuilder/snake.dump",finalbytes);
 
     let mut counter = 0;
     for b in finalbytes {
