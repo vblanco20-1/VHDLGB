@@ -31,11 +31,9 @@ ld H $Mp_MSB
 ld L #0x04
 
 --print hello world into the tilemap one letter at a time
-ld b $lH 
-ld (hl) b
+ld (hl) $lH 
 inc L
-ld b $lE 
-ld (hl) b
+ld (hl) $lE 
 inc L
 ld b $lL 
 ld (hl) b

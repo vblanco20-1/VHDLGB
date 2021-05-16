@@ -558,8 +558,8 @@ fn main() {
         //"D:/FPGA/PGB/Programs/vassembler/starter.vasm",
         //"D:/FPGA/PGB/Programs/vassembler/microjump.vasm",
        // "D:/FPGA/PGB/Programs/vassembler/microloop.vasm",
-        "D:/FPGA/PGB/Programs/vassembler/microstore.vasm",
-        //"D:/FPGA/PGB/Programs/vassembler/snake.vasm"
+        //"D:/FPGA/PGB/Programs/vassembler/microstore.vasm",
+        "D:/FPGA/PGB/Programs/vassembler/snake.vasm"
     ];
 
     let mut finalbytes : Vec<u8> = Vec::new();
@@ -591,8 +591,8 @@ fn main() {
 
     let mut vhdlarray = "".to_string();
 
-   // fs::write("D:/FPGA/PGB/Programs/rambuilder/snake.dump",finalbytes);
-
+    fs::write("D:/FPGA/PGB/Programs/rambuilder/snake.dump",finalbytes);
+/*
     let mut counter = 0;
     for b in finalbytes {
         let mut byte = format!("{:#04x}\",",b);
@@ -605,5 +605,5 @@ fn main() {
         }
     }
 
-    println!("{}",vhdlarray);
+    println!("{}",vhdlarray);*/
 }

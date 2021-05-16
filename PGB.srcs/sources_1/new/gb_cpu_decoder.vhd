@@ -90,7 +90,12 @@ begin
         when "011" => return NOOP;
         when "100" => return R_ALU_SIMPLE;
         when "101" => return R_ALU_SIMPLE;
-        when "110" => return I_LD_LOAD; -- inmediate load
+        when "110" => 
+        if(dy = "110") then  -- (hl) register
+            return I_LD_LOAD_MEM; -- load into m(hl)
+        else 
+            return I_LD_LOAD; -- inmediate load
+        end if;
         when others => return NOOP;    
     end case;
 
@@ -187,6 +192,8 @@ begin
     -- loads RAM
     when I_LD_EXEC => 
         return ramdata;
+    when I_LD_LOAD_MEM|I_LD_EXEC_MEM => 
+        return ramdata;
     when others => return x"00";
     end case;
 end select_reg_data;
@@ -223,6 +230,14 @@ begin
     ret.reg_A := decode_registers_basic(dy); 
     ret.reg_B := Zero;
     ret.reg_wide := WideZero;
+    when I_LD_LOAD_MEM =>
+    ret.reg_A := Zero; 
+    ret.reg_B := Zero;
+    ret.reg_wide :=  HL;
+    when I_LD_EXEC_MEM =>
+    ret.reg_A := Zero; 
+    ret.reg_B := Zero;
+    ret.reg_wide :=  HL;
     when R_LD_MEM => 
     ret.reg_A := decode_registers_basic(dz); 
     ret.reg_B := Zero;
@@ -242,6 +257,8 @@ function next_instr(inst : in instruction_state; branch : in std_logic) return i
 begin
     case (inst) is 
     when I_LD_LOAD => return I_LD_EXEC;
+    when I_LD_LOAD_MEM => return I_LD_EXEC_MEM;
+    when I_LD_EXEC_MEM => return R_LD_MEM_WRITE;
     when R_LD_MEM => return R_LD_MEM_WRITE;
     when I_ABS_BRANCH => return I_ABS_BRANCH_LD1;
     when I_ABS_BRANCH_LD1 => return I_ABS_BRANCH_LD2;
@@ -272,7 +289,7 @@ function calculate_next_PC(inst : in instruction_state; din : in decoder_in; bra
 begin
     case (inst) is 
     when HALT => return din.reg.PC;
-    when R_LD_MEM => return din.reg.PC; -- when doing mem writes we dont advance PC
+    when R_LD_MEM|I_LD_EXEC_MEM => return din.reg.PC; -- when doing mem writes we dont advance PC
     when I_ABS_BRANCH_JMP => return branch_target;
     when R_STOP => return x"0000";
     when others => return std_logic_vector(unsigned(din.reg.PC) + to_unsigned(1,16));
@@ -282,7 +299,7 @@ end calculate_next_PC;
 function writes_to_ram(inst : instruction_state) return boolean is 
 begin
     case (inst) is 
-    when R_LD_MEM => return true;
+    when R_LD_MEM|I_LD_EXEC_MEM => return true;
     when others => return false;
     end case;
 end writes_to_ram;
@@ -326,6 +343,9 @@ begin
 
     if(r.st = sFETCH) then 
         v.flags := i.reg.flags;
+        if(r.inst = I_LD_LOAD_MEM) then 
+            v.ramwrite := i.ram.data;
+        end if;
     end if;
 
     if(r.st = sEXEC) then  -- decide branching target
@@ -426,9 +446,9 @@ begin
     elsif(r.st = sEXEC) then -- calculate next adress at EXEC stage
         if(r.inst = I_ABS_BRANCH_JMP) then 
             v.load_adress := r.branch_adress;
-        elsif (r.inst = R_LD_MEM) then
+        elsif (r.inst = R_LD_MEM or r.inst = I_LD_EXEC_MEM) then
             v.load_adress := i.reg.wide; -- HL      
-            ov.ram.addr := r.load_adress;     
+            ov.ram.addr := r.load_adress;       
         else
             v.load_adress := calculate_next_addr(r.inst,i);
         end if;
@@ -442,7 +462,11 @@ begin
         ov.ram.we  := '0';
     end if;
      
-    ov.ram.data := i.reg.data_A;
+    if(r.inst = I_LD_EXEC_MEM) then 
+        ov.ram.data := r.ramwrite;
+    else     
+        ov.ram.data := i.reg.data_A;
+    end if;
 
     -- clock syncronization. We want the value to update at the wait/exec stages
     if(r.st = sFETCH or r.st = sWAIT) then

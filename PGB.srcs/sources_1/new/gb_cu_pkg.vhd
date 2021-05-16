@@ -39,7 +39,7 @@ package gb_cu_pkg is
       -- inmediate alu
        I_ALU, I_ALU_LOAD, 
       -- control flow
-      I_ABS_BRANCH, I_ABS_BRANCH_LD1 , I_ABS_BRANCH_LD2, I_ABS_BRANCH_JMP, -- absulte 16 bit branch 
+       I_ABS_BRANCH, I_ABS_BRANCH_LD1 , I_ABS_BRANCH_LD2, I_ABS_BRANCH_JMP, -- absulte 16 bit branch 
 
        PREFIX_CD,
        -- register based load
@@ -47,7 +47,8 @@ package gb_cu_pkg is
        -- register load, but write mem
        R_LD_MEM, R_LD_MEM_WRITE,
 
-       I_LD_LOAD, I_LD_EXEC
+       I_LD_LOAD, I_LD_EXEC,
+       I_LD_LOAD_MEM, I_LD_EXEC_MEM
     );
   type cpu_state is (
       sSTART,
