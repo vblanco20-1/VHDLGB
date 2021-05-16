@@ -85,7 +85,7 @@ signal test_block_1 : mem_type := (
   x"00",x"00",x"c3",x"0a",x"00",x"d2",x"0a",x"00",x"12",x"33",x"22",x"06",x"ff",x"51",x"80",x"76",
   x"00",x"3e",x"11",x"00",x"00",x"c3",x"02",x"00",x"3e",x"ff",x"76",x"00",x"00",x"00",x"00",x"00",
   x"00",x"3e",x"08",x"06",x"01",x"90",x"c2",x"04",x"00",x"06",x"11",x"76",x"00",x"00",x"00",x"00",
-  x"00",x"00",x"00",x"00",x"26",x"00",x"2e",x"01",x"06",x"33",x"70",x"76",x"00",x"00",x"00",x"00");
+  x"00",x"00",x"00",x"00",x"26",x"00",x"2e",x"01",x"06",x"33",x"70",x"2c",x"36",x"44",x"76",x"00");
 
 
 begin
@@ -222,6 +222,7 @@ begin
   
     wait for 2 ns;
     check_equal( test_block_1(49) ,std_logic_vector'(x"33"), result("should end with m1 at x33"));   
+    check_equal( test_block_1(50) ,std_logic_vector'(x"44"), result("should end with m2 at x44"));   
   end if;
 
 

@@ -169,10 +169,11 @@ signal decin: decoder_in;
 signal decout : decoder_out;
 signal rmin, rmin_ppu: ram_in;
 signal rmout, rmout_ppu : ram_out;
+signal is_draw : std_logic;
 begin
 
 reset <= sw(0);
-led(0) <= '1';
+led(0) <= '0';
 vgaRed <= vga_rgb(3 downto 0);
 --vgaRed(3) <= rom_load;
 
@@ -203,9 +204,9 @@ ram_clock <= decout.ramclock;--draw_clock;
 draw_clock <= ram_clock;
 --rsprites : gb_tetrissprites_rom port map (draw_clock,sprite_addr,sprite_data);
 --rtiles : gb_tetrismap_rom port map (draw_clock,tile_addr,map_data);
-
+is_draw <= rom_load and sw(1);
 ram: gb_ram port map (mem_clock=> ram_clock,clock=>clk_source,  
-ppu_drawing => rom_load,
+ppu_drawing => is_draw,
 
 i_cpu => rmin, o_cpu => rmout,
 i_ppu => rmin_ppu, o_ppu => rmout_ppu
@@ -229,6 +230,7 @@ rmin <= decout.ram;
 rmin_ppu.data <= x"00";
 rmin_ppu.addr(15) <= '1';
 rmin_ppu.addr(14 downto 0) <= rom_addr(14 downto 0);
+rmin_ppu.we <= '0';
 
 rom_data <= rmout_ppu.data;
 

@@ -50,6 +50,7 @@ architecture Behavioral of gb_decoder is
         next_i : instruction_state; -- next instruction. For multiclock
         do_branch : std_logic; -- perform branching
         ramwrite : gb_word; -- temporal buffer for memory write
+        flags : alu_flags; -- cached flags
     end record dec_state;
 
     constant zero_state : dec_state := (    
@@ -60,7 +61,8 @@ architecture Behavioral of gb_decoder is
         st => sSTART,
         inst => NOOP,
         next_i => NOOP,
-        do_branch => '0'
+        do_branch => '0',
+        flags=> zero_alu_flags
     );
 
     signal r,rin : dec_state;
@@ -316,17 +318,22 @@ begin
         else 
             v.inst := r.next_i;
         end if;
+       
     end if;
 
-    op := read_op(v.opcode);
+    op := read_op(r.opcode);
     sg := decode_op(op);
+
+    if(r.st = sFETCH) then 
+        v.flags := i.reg.flags;
+    end if;
 
     if(r.st = sEXEC) then  -- decide branching target
         --at the time we have ram input with the OP
         case(r.inst) is 
         when I_ABS_BRANCH =>  
             --if should_branch(decode_branch_type(v.opcode),i.reg.flags) then
-            if should_branch(sg.cond,i.reg.flags) then 
+            if should_branch(sg.cond,r.flags) then 
               
                  v.do_branch := '1';
             else
@@ -348,10 +355,10 @@ begin
     
 
     -- read registers
-    ov.reg := read_registers(v,v.opcode);
+    ov.reg := read_registers(r,r.opcode);
 
     -- we write at the write substate if the instruction has writeback
-    if((r.st = sWrite) and instruction_has_reg_write(v.inst)) then 
+    if((r.st = sWrite) and instruction_has_reg_write(r.inst)) then 
         ov.reg.write_enable := '1';        
     else
         ov.reg.write_enable := '0';
@@ -364,10 +371,10 @@ begin
         ov.reg.flag_write := '0';
     end if;
    
-    ov.reg.data := select_reg_data(v.inst, i.reg,i.alu.op_R, i.ram.data);
+    ov.reg.data := select_reg_data(r.inst, i.reg,i.alu.op_R, i.ram.data);
 
     -- advance the PC at the last state, to be ready for next fetch    
-    if(r.st = sWAIT and r.inst /= HALT) then      
+    if(r.st = sWAIT and r.inst /= HALT) then
         
         ov.reg.PCIn := calculate_next_PC(r.inst,i, r.branch_adress);
     elsif (r.st = sSTART) then 
@@ -383,7 +390,7 @@ begin
         ov.alu.mode := sg.alu_op;--decode_alu_mode(op.y);
         
         if(op.y = "001" or op.y = "011") then
-            ov.alu.with_carry := '1' and i.reg.flags.full_carry;
+            ov.alu.with_carry := '1' and r.flags.full_carry;
         else
             ov.alu.with_carry := '0';
         end if;
@@ -411,6 +418,8 @@ begin
         ov.alu.op_B(7 downto 0) := i.reg.data_B;
     end if;
 
+    ov.ram.addr := r.load_adress;
+
     -- ram outputs
     if(r.st = sSTART) then 
         v.load_adress := x"0000";
@@ -418,15 +427,16 @@ begin
         if(r.inst = I_ABS_BRANCH_JMP) then 
             v.load_adress := r.branch_adress;
         elsif (r.inst = R_LD_MEM) then
-            v.load_adress := i.reg.wide; -- HL           
+            v.load_adress := i.reg.wide; -- HL      
+            ov.ram.addr := r.load_adress;     
         else
-            v.load_adress := calculate_next_addr(v.inst,i);
+            v.load_adress := calculate_next_addr(r.inst,i);
         end if;
     end  if;
 
-    ov.ram.addr := r.load_adress;
     
-    if(writes_to_ram(v.inst)) then 
+    
+    if(writes_to_ram(r.inst)) then 
         ov.ram.we  := '1';
     else
         ov.ram.we  := '0';
