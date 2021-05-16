@@ -124,6 +124,8 @@ package gb_package is
     reg :  reg_out;
     alu :  alu_out;
     ram : ram_out;
+    interrupt_addr : gb_doubleword;
+    request_interrupt : std_logic;
   end record decoder_in;
 
   type decoder_out is record 

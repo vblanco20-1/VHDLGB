@@ -40,7 +40,11 @@ begin
 end process;
 
 comb : process (i)
+variable local_addr : gb_doubleword;
 begin	
-	nx_idx <= to_integer(unsigned(i.addr));
+
+		local_addr(12 downto 0) := i.addr(12 downto 0);
+		local_addr(15 downto 13) :=  "000"; 
+	nx_idx <= to_integer(unsigned(local_addr));
 end process;
 end Behavioral;

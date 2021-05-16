@@ -266,6 +266,7 @@ begin
         when IDload => rom_load <= '1'; 
         when TileLoad1 => rom_load <= '1';
         when TileLoad2 => rom_load <= '1';
+        when Idle => rom_load <= '0';
         when others => rom_load <= '1';
     end case;
 

@@ -135,9 +135,12 @@ Port ( clk,reset : in std_logic;
 end component;
 
 component gb_ram is
-Port(mem_clock,clock : in std_logic;  
-			i : in ram_in;
-			o: out ram_out);
+		Port(
+			mem_clock,clock, ppu_drawing : in std_logic; 
+
+			i_ppu, i_cpu : in ram_in;
+			o_ppu,o_cpu: out ram_out);
+
 end component; 
 
 
@@ -164,8 +167,8 @@ signal regin: reg_in;
 signal regout : reg_out;
 signal decin: decoder_in;
 signal decout : decoder_out;
-signal rmin: ram_in;
-signal rmout : ram_out;
+signal rmin, rmin_ppu: ram_in;
+signal rmout, rmout_ppu : ram_out;
 begin
 
 reset <= sw(0);
@@ -198,10 +201,15 @@ fb_write(1 downto 0) <= pix_out;
 );
 ram_clock <= decout.ramclock;--draw_clock;
 draw_clock <= ram_clock;
-rsprites : gb_tetrissprites_rom port map (draw_clock,sprite_addr,sprite_data);
-rtiles : gb_tetrismap_rom port map (draw_clock,tile_addr,map_data);
+--rsprites : gb_tetrissprites_rom port map (draw_clock,sprite_addr,sprite_data);
+--rtiles : gb_tetrismap_rom port map (draw_clock,tile_addr,map_data);
 
-ram: gb_ram port map (mem_clock=> ram_clock,clock=>clk_source,  i => rmin, o => rmout);
+ram: gb_ram port map (mem_clock=> ram_clock,clock=>clk_source,  
+ppu_drawing => rom_load,
+
+i_cpu => rmin, o_cpu => rmout,
+i_ppu => rmin_ppu, o_ppu => rmout_ppu
+);
 alu: gb_alu port map (i => aluin, o => aluout);
 reg: gb_reg port map (clk=> clk_source, reset => reset, i => regin, o => regout);
 dec: gb_decoder port map (clk=> clk_source, reset => reset, i => decin, o => decout);
@@ -217,19 +225,18 @@ regin <= decout.reg;
 aluin <= decout.alu;
 rmin <= decout.ram;
 
-sprite_addr(11 downto 0) <= rom_addr(11 downto 0);
-tile_addr <= rom_addr;--(11 downto 0) ;
-sprite_addr(15 downto 12) <= "0000";
---tile_addr(15 downto 12) <= "0000";
 
---rom_data <= map_data when load_sprite = '0' else sprite_data;
-rom_data <= map_data when load_sprite = '0' else sprite_data;
+rmin_ppu.data <= x"00";
+rmin_ppu.addr(15) <= '1';
+rmin_ppu.addr(14 downto 0) <= rom_addr(14 downto 0);
+
+rom_data <= rmout_ppu.data;
 
 sync: gb_ppu_vgasync port map(pixel_clk => draw_clock,hsync=>hsync, vsync=>vsync,render_done=>render_done,ppu_start=>hstart,ppu_vertline=>ppu_vline );
 
 
 ppu: gb_ppu 
-generic map (MapAdress => 0,TileAdress => 4096 )
+generic map (MapAdress => 6144,TileAdress => 0 )
 port map (
 	pixel_clk=>draw_clock,
 	hstart=> hstart,
