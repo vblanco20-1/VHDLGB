@@ -277,7 +277,8 @@ end next_instr;
 -- decide the next adress for the RAM
 function calculate_next_addr(inst : in instruction_state; din : in decoder_in ) return gb_doubleword is 
 begin
-    if(inst = R_STOP or inst = HALT) then
+    if((inst = R_STOP or inst = HALT) and (din.request_interrupt = '0')) then
+        
         return din.reg.PC;    
     else
         return std_logic_vector(unsigned(din.reg.PC) + to_unsigned(1,16));
@@ -287,8 +288,7 @@ end calculate_next_addr;
 -- decide the next PC
 function calculate_next_PC(inst : in instruction_state; din : in decoder_in; branch_target : in gb_doubleword ) return gb_doubleword is 
 begin
-    case (inst) is 
-    when HALT => return din.reg.PC;
+    case (inst) is     
     when R_LD_MEM|I_LD_EXEC_MEM => return din.reg.PC; -- when doing mem writes we dont advance PC
     when I_ABS_BRANCH_JMP => return branch_target;
     when R_STOP => return x"0000";
@@ -317,15 +317,17 @@ variable v : dec_state;
 variable ov : decoder_out;
 variable op : split_opcode;
 variable sg : cpu_op_signals;
+variable halted : boolean;
 begin
 
     v := r;
     ov := zero_decoder_out;
 
     v.st := next_cpu_state(r.st);
-
+    halted := r.inst = HALT and (i.request_interrupt = '0');
+   
     -- read instruction
-    if(r.st = sFETCH and r.inst /= HALT) then 
+    if(r.st = sFETCH and not halted) then 
         -- if next is noop, its not a multiclock instruction
         if(r.next_i = NOOP) then 
             v.inst := decode_instruction_state(i.ram.data);
@@ -394,7 +396,7 @@ begin
     ov.reg.data := select_reg_data(r.inst, i.reg,i.alu.op_R, i.ram.data);
 
     -- advance the PC at the last state, to be ready for next fetch    
-    if(r.st = sWAIT and r.inst /= HALT) then
+    if(r.st = sWAIT and not halted) then
         
         ov.reg.PCIn := calculate_next_PC(r.inst,i, r.branch_adress);
     elsif (r.st = sSTART) then 

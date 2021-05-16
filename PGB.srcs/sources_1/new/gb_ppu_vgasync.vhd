@@ -29,7 +29,7 @@ use work.gb_package.all;
 entity gb_ppu_vgasync is
   Port (
     pixel_clk,hsync,vsync, render_done: in std_logic;
-    ppu_start: out std_logic;
+    ppu_start, frame_ended: out std_logic;
     ppu_vertline: out std_logic_vector(7 downto 0)
 	);
 

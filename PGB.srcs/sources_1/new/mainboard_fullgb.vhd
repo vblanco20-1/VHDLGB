@@ -106,7 +106,7 @@ end component;
 component gb_ppu_vgasync is
   Port (
     pixel_clk,hsync,vsync, render_done: in std_logic;
-    ppu_start: out std_logic;
+    ppu_start,frame_ended: out std_logic;
     ppu_vertline: out std_logic_vector(7 downto 0)
 	);
 
@@ -170,6 +170,7 @@ signal decout : decoder_out;
 signal rmin, rmin_ppu: ram_in;
 signal rmout, rmout_ppu : ram_out;
 signal is_draw : std_logic;
+signal draw_ended : std_logic;
 begin
 
 reset <= sw(0);
@@ -222,6 +223,8 @@ decin.ram <= rmout;
 decin.reg <= regout;
 decin.alu <= aluout;
 
+decin.request_interrupt <= draw_ended;
+
 regin <= decout.reg;
 aluin <= decout.alu;
 rmin <= decout.ram;
@@ -234,7 +237,11 @@ rmin_ppu.we <= '0';
 
 rom_data <= rmout_ppu.data;
 
-sync: gb_ppu_vgasync port map(pixel_clk => draw_clock,hsync=>hsync, vsync=>vsync,render_done=>render_done,ppu_start=>hstart,ppu_vertline=>ppu_vline );
+sync: gb_ppu_vgasync port map(pixel_clk => draw_clock,hsync=>hsync, 
+vsync=>vsync,render_done=>render_done,
+ppu_start=>hstart,ppu_vertline=>ppu_vline,
+frame_ended =>draw_ended
+);
 
 
 ppu: gb_ppu 
