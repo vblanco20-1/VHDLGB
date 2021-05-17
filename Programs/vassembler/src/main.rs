@@ -37,6 +37,7 @@ enum AluOP{
     Add,
     Sub,
     Inc,
+    Dec,
     None
 }
 
@@ -152,6 +153,14 @@ fn write_AluInstruction(s : &ALUInstruction)-> Result<u8,&'static str > {
             op |= u << 3;
             return Ok(op);
         },    
+        AluOP::Dec => {
+            let incprefix : u8 = 0;
+            let z : u8 = 5;
+            op = z;
+            op |= incprefix << 6;
+            op |= u << 3;
+            return Ok(op);
+        },    
         _ => {return Err("Invalid alu operation");}
     };
     
@@ -176,6 +185,7 @@ fn get_alu(s : &str) -> Option<AluOP> {
        "add" => Some(AluOP::Add),
        "sub" => Some(AluOP::Sub),
        "inc" => Some(AluOP::Inc),
+       "dec" => Some(AluOP::Dec),
        _ =>  Option::None
    }
 }
@@ -425,7 +435,7 @@ fn assemble_file(filename : &str) -> Result<Vec<u8>,String>
                 let regA= string_to_register(sections[1]);
 
                 let op = aluop.unwrap();
-                if  op == AluOP::Inc {
+                if  op == AluOP::Inc || op == AluOP::Dec {
                     let vars = ALUInstruction{
                         operation: op,
                         reg: regA,
@@ -491,10 +501,13 @@ fn assemble_file(filename : &str) -> Result<Vec<u8>,String>
                         match a.regA {
                             Register::A => bytes.push(0x3E),
                             Register::B => bytes.push(0x06),
+                            Register::C => bytes.push(0x0E),
+                            Register::D => bytes.push(0x16),
+                            Register::E => bytes.push(0x1E),
                             Register::H => bytes.push(0x26),
                             Register::L => bytes.push(0x2E),
                             Register::MHL=> bytes.push(0x36),
-                            _ => bytes.push(0x00),
+                            _ =>{ panic!()},
                         }
                         
                         bytes.push(a.value);
@@ -576,14 +589,14 @@ fn main() {
         let mut i = 0;
         for b in bytes.unwrap()
         {
-            println!("{}:  {:#04x}",i,b);
+            //println!("{}:  {:#04x}",i,b);
             i+= 1;
 
             finalbytes[i + offset] = b;
         }
         for n in i..program_size
         {            
-            println!("{}:  {:#04x}",n,0);
+            //println!("{}:  {:#04x}",n,0);
         }
 
         offset += program_size;

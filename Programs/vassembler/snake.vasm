@@ -18,55 +18,89 @@ noop
 #byte lW = 0x20
 #byte lR = 0x1B 
 #byte lD = 0x0D
+--draw 255 times before going to next line
+#byte drawcount = 0xFF
 
-#byte Mp_MSB = 0x99
+--variables
+#byte Mp_MSB = 0x98
 #byte Mp_LSB = 0x00
+
 :vsync
 noop
 
+-- load drawcount into c
+ld c $drawcount 
+
 --hello world implementation
 
+:drawloop
 --load map adress into HL
 ld H $Mp_MSB
-ld L #0x04
+ld L $Mp_LSB
+
+-- fully clear everything
+
+ld a #0x1
+ld e #0x7D
+:clearloop_outer
+
+ld L #0xFF
+:clearloop_inner
+ld (hl) e
+dec L
+jmp nz :clearloop_inner
+inc H
+dec a
+jmp nz :clearloop_outer
+
+
+--reset HL
+ld H $Mp_MSB
+ld L $Mp_LSB
+
+-- increment l by d
+ld a l
+add a d
+ld l a
 
 --print hello world into the tilemap one letter at a time
-ld (hl) $lH 
+ld (hl) $lH
 inc L
 ld (hl) $lE 
 inc L
-ld b $lL 
-ld (hl) b
+ld (hl) $lL 
 inc L
-ld b $lL 
-ld (hl) b
+ld (hl) $lL
 inc L
-ld b $lO 
-ld (hl) b
+ld (hl) $lO 
 inc L
-ld b #0x25
-ld (hl) b
+ld (hl) #0x25
 inc L
-ld b $lW 
-ld (hl) b
+ld (hl) $lW 
 inc L
-ld b $lO 
-ld (hl) b
+ld (hl) $lO 
 inc L
-ld b $lR 
-ld (hl) b
+ld (hl) $lR 
 inc L
-ld b $lL 
-ld (hl) b
+ld (hl) $lL 
 inc L
-ld b $lD 
-ld (hl) b
+ld (hl) $lD 
 inc L
+
+-$byte halt = 0x76
+
+-- decrement y location of world
+ld e #0x20
+ld a d 
+add a e
+ld d a
+
 jmp :vsync
 
 :init
 noop
 ld a #0xCC
+ld d #0x00
 noop
 jmp :vsync
 noop
