@@ -45,13 +45,13 @@ ld e #0x7D
 :clearloop_outer
 
 ld L #0xFF
-:clearloop_inner
-ld (hl) e
-dec L
-jmp nz :clearloop_inner
-inc H
-dec a
-jmp nz :clearloop_outer
+--:clearloop_inner
+-ld (hl) e
+-dec L
+-jmp nz :clearloop_inner
+-inc H
+-dec a
+-jmp nz :clearloop_outer
 
 
 --reset HL
@@ -63,7 +63,17 @@ ld a l
 add a d
 ld l a
 
+--a has L, decrement writing clear 
+:preloop
+-ld (hl) #0xFF
+-dec L
+-jmp nz :preloop
+
+--reset l to what it was
+ld l a
 --print hello world into the tilemap one letter at a time
+ld (hl) #0xFF
+inc L
 ld (hl) $lH
 inc L
 ld (hl) $lE 
@@ -86,21 +96,35 @@ ld (hl) $lL
 inc L
 ld (hl) $lD 
 inc L
-
--$byte halt = 0x76
+ld (hl) #0xFF
+inc L
+ld (hl) #0xFF
+inc L
+ld (hl) #0xFF
+inc L
+ld (hl) #0xFF
+inc L
+ld (hl) #0xFF
+inc L
+ld (hl) #0xFF
+inc L
+ld (hl) #0xFF
+inc L
 
 -- decrement y location of world
-ld e #0x20
-ld a d 
-add a e
-ld d a
+dec d
+jmp nz :branchend
+ld d #0x8
+
+:branchend
+$byte halt = 0x76
 
 jmp :vsync
 
 :init
 noop
 ld a #0xCC
-ld d #0x00
+ld d #0x8
 noop
 jmp :vsync
 noop
