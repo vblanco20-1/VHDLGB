@@ -51,6 +51,8 @@ architecture Behavioral of gb_decoder is
         do_branch : std_logic; -- perform branching
         ramwrite : gb_word; -- temporal buffer for memory write
         flags : alu_flags; -- cached flags
+
+        last_int, current_int : std_logic; -- interrupt detector
     end record dec_state;
 
     constant zero_state : dec_state := (    
@@ -62,6 +64,8 @@ architecture Behavioral of gb_decoder is
         inst => NOOP,
         next_i => NOOP,
         do_branch => '0',
+        current_int => '0',
+        last_int => '0',
         flags=> zero_alu_flags
     );
 
@@ -277,8 +281,7 @@ end next_instr;
 -- decide the next adress for the RAM
 function calculate_next_addr(inst : in instruction_state; din : in decoder_in ) return gb_doubleword is 
 begin
-    if((inst = R_STOP or inst = HALT) and (din.request_interrupt = '0')) then
-        
+    if(inst = R_STOP) then        
         return din.reg.PC;    
     else
         return std_logic_vector(unsigned(din.reg.PC) + to_unsigned(1,16));
@@ -317,15 +320,19 @@ variable v : dec_state;
 variable ov : decoder_out;
 variable op : split_opcode;
 variable sg : cpu_op_signals;
-variable halted : boolean;
+variable halted, unlock : boolean;
 begin
 
     v := r;
     ov := zero_decoder_out;
 
     v.st := next_cpu_state(r.st);
-    halted := r.inst = HALT and (i.request_interrupt = '0');
-   
+    
+    --unlock halting once we detect rising edge
+    unlock := r.current_int = '1' and r.last_int = '0';
+
+    halted := r.inst = HALT and not unlock;
+    
     -- read instruction
     if(r.st = sFETCH and not halted) then 
         -- if next is noop, its not a multiclock instruction
@@ -337,13 +344,21 @@ begin
         else 
             v.inst := r.next_i;
         end if;
-       
     end if;
 
     op := read_op(r.opcode);
     sg := decode_op(op);
 
+    
+
     if(r.st = sFETCH) then 
+        v.last_int := r.current_int;
+        v.current_int := i.request_interrupt;
+
+        if(halted and unlock ) then 
+            v.inst := NOOP;
+        end if;
+
         v.flags := i.reg.flags;
         if(r.inst = I_LD_LOAD_MEM) then 
             v.ramwrite := i.ram.data;
@@ -400,7 +415,11 @@ begin
         
         ov.reg.PCIn := calculate_next_PC(r.inst,i, r.branch_adress);
     elsif (r.st = sSTART) then 
-        ov.reg.PCIn := x"0000";        
+        --if(i.request_interrupt = '0') then 
+            ov.reg.PCIn := x"0000";
+        --else
+        --   ov.reg.PCIn := i.interrupt_addr;
+        --end if;        
     else
         ov.reg.PCIn := i.reg.PC;
     end if;
@@ -444,7 +463,12 @@ begin
 
     -- ram outputs
     if(r.st = sSTART) then 
-        v.load_adress := x"0000";
+       -- if(i.request_interrupt = '0') then 
+            v.load_adress := x"0000";
+        --else
+        --    v.load_adress := i.interrupt_addr;
+        --end if;
+        
     elsif(r.st = sEXEC) then -- calculate next adress at EXEC stage
         if(r.inst = I_ABS_BRANCH_JMP) then 
             v.load_adress := r.branch_adress;
@@ -452,7 +476,11 @@ begin
             v.load_adress := i.reg.wide; -- HL      
             ov.ram.addr := r.load_adress;       
         else
-            v.load_adress := calculate_next_addr(r.inst,i);
+            if halted then 
+                v.load_adress := i.reg.PC;
+            else
+                v.load_adress := calculate_next_addr(r.inst,i);
+            end if;
         end if;
     end  if;
 
@@ -477,12 +505,17 @@ begin
         ov.ramclock := '0';
     end if;
 
- 
-if reset = '1' then
-rin <= zero_state;
-else 
-rin <= v;
-end if;
+    --if unlock then 
+    --    v := zero_state;
+    --    v.current_int := '1';
+    --    v.last_int := '1';
+    --end if;
+
+    if reset = '1' then
+        rin <= zero_state;
+    else    
+        rin <= v;   
+    end if;
 
 o <= ov;
 end process;

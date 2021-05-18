@@ -129,7 +129,7 @@ dec: gb_decoder port map (clk=> clock, reset => reset, i => decin, o => decout);
 decin.reg <= regout;
 decin.alu <= aluout;
 decin.ram.data <= tr_data;
-
+decin.request_interrupt <= '0';
 tr_idx <= decout.ram.addr;
 
 ramclock <= decout.ramclock;

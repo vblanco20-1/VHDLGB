@@ -18,3 +18,5 @@ connect_debug_port u_ila_0/probe22 [get_nets [list {dec/FSM_onehot_r_reg[st][0]_
 
 
 
+
+

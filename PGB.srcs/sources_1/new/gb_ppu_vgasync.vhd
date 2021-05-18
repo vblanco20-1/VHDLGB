@@ -62,10 +62,11 @@ end process;
 
 comb : process (r,hsync,vsync, render_done)
 variable sc  : sync_state;
+variable fe : std_logic;
 variable val1,val2,val3  : unsigned(7 downto 0);
 begin
 
-
+    fe := '0';
 sc := r;
 case r.state is
 
@@ -73,8 +74,9 @@ when Idle => -- idle state waits for vsync to get triggered
     if vsync = '1' then
         sc.state := LineStart;
         sc.hcnt := 0;
-        sc.vcnt := 0;
+        sc.vcnt := 0;        
     end if;
+    fe := '1';
 when LineStart => -- line start counts 8 cycles to let ppu begin
     sc.hcnt := sc.hcnt+1;
     if(r.hcnt >= 8) then 
@@ -97,7 +99,7 @@ when LineEnd => -- wait until hsync, restart to idle if end of frame
 end case;
 
 rin <= sc;
-
+frame_ended <= fe;
 ppu_vertline <= std_logic_vector(to_unsigned(r.vcnt mod 255, ppu_vertline'length));
 
 case r.state is

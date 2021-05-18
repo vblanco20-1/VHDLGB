@@ -224,7 +224,7 @@ decin.reg <= regout;
 decin.alu <= aluout;
 
 decin.request_interrupt <= draw_ended;
-
+decin.interrupt_addr <= x"0004";
 regin <= decout.reg;
 aluin <= decout.alu;
 rmin <= decout.ram;
