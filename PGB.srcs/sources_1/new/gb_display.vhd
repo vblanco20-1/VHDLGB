@@ -40,7 +40,7 @@ variable sc: std_logic;
 begin	
 	if (clock'event and clock='1') then
 		gx := "00000000"; gy := "00000000"; sc := '0';
-		if(hcnt >= 10 and hcnt < 10+180) then -- we want to run it one pixel ahead
+		if(hcnt >= 10 and hcnt < 10+160) then -- we want to run it one pixel ahead
 			if(vcnt >= 100 and vcnt < 450) then --duplicated Y
 				gx := hcnt(7 downto 0) - 10 ;
 				gy := vcnt(8 downto 1) - 50;

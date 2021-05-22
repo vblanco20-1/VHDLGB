@@ -76,7 +76,7 @@ when Idle => -- idle state waits for vsync to get triggered
         sc.hcnt := 0;
         sc.vcnt := 0;        
     end if;
-    fe := '1';
+    
 when LineStart => -- line start counts 8 cycles to let ppu begin
     sc.hcnt := sc.hcnt+1;
     if(r.hcnt >= 8) then 
@@ -92,6 +92,7 @@ when LineEnd => -- wait until hsync, restart to idle if end of frame
         sc.vcnt := r.vcnt + 1;
         if(r.vcnt >= 144) then 
             sc.state := Idle;
+            fe := '1';
         else
             sc.state := LineStart;
         end if;

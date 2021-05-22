@@ -77,15 +77,16 @@ signal tr_nextdata: gb_word;
 signal program_index: std_logic_vector(15 downto 0);
 signal ram_write : std_logic;
 signal ram_write_data: gb_word;
-TYPE mem_type IS ARRAY(0 TO (16*4-1)) OF gb_word; 
+TYPE mem_type IS ARRAY(0 TO (16*5-1)) OF gb_word; 
 
 
 
 signal test_block_1 : mem_type := (
-  x"00",x"00",x"c3",x"0a",x"00",x"d2",x"0a",x"00",x"12",x"33",x"22",x"06",x"ff",x"51",x"80",x"76",
-  x"00",x"3e",x"11",x"00",x"00",x"c3",x"02",x"00",x"3e",x"ff",x"76",x"00",x"00",x"00",x"00",x"00",
-  x"00",x"3e",x"08",x"06",x"01",x"90",x"c2",x"04",x"00",x"06",x"11",x"76",x"00",x"00",x"00",x"00",
-  x"00",x"00",x"00",x"00",x"26",x"00",x"2e",x"01",x"06",x"33",x"70",x"2c",x"36",x"44",x"76",x"00");
+  x"00",x"c3",x"0a",x"00",x"d2",x"0a",x"00",x"12",x"33",x"22",x"06",x"ff",x"51",x"80",x"76",x"00",
+x"3e",x"11",x"00",x"00",x"c3",x"02",x"00",x"3e",x"ff",x"76",x"00",x"00",x"00",x"00",x"00",x"00",
+x"3e",x"08",x"06",x"01",x"90",x"c2",x"04",x"00",x"06",x"11",x"76",x"00",x"00",x"00",x"00",x"00",
+x"00",x"00",x"00",x"26",x"00",x"2e",x"01",x"06",x"33",x"70",x"2c",x"36",x"44",x"76",x"00",x"00",
+x"00",x"00",x"00",x"21",x"01",x"00",x"36",x"33",x"3e",x"11",x"ea",x"00",x"00",x"76",x"00",x"00");
 
 
 begin
@@ -225,6 +226,23 @@ begin
     check_equal( test_block_1(50) ,std_logic_vector'(x"44"), result("should end with m2 at x44"));   
   end if;
 
+  if run("bigregs") then --this one should write 33 to adress 1 and 11 to adress 0
+  program_index <=  std_logic_vector'(x"0004");
+  read_reg <= '0';
+  wantsclock <= '1';
+  reset <= '1';
+
+  wait for 4 ns;
+  reset <= '0';
+
+  wait for 160 ns; -- 20 clocks
+  read_reg <= '1';
+
+  wait for 2 ns;
+  check_equal( test_block_1(16*4 + 1) ,std_logic_vector'(x"33"), result("should end with m2 at x33"));   
+
+  check_equal( test_block_1(16*4) ,std_logic_vector'(x"11"), result("should end with m1 at x11"));   
+  end if;
 
 
 

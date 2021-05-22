@@ -48,7 +48,13 @@ package gb_cu_pkg is
        R_LD_MEM, R_LD_MEM_WRITE,
 
        I_LD_LOAD, I_LD_EXEC,
-       I_LD_LOAD_MEM, I_LD_EXEC_MEM
+       I_LD_LOAD_MEM, I_LD_EXEC_MEM,       
+
+       I_LD_WIDELOAD,I_LD_WIDELOAD_LD1, I_LD_WIDELOAD_LD2,
+
+       -- memory load/store
+       I_MEM_LOAD, I_MEM_LOAD_LD1, I_MEM_LOAD_LD2, I_MEM_LOAD_EXEC,
+       I_MEM_STORE, I_MEM_STORE_LD1, I_MEM_STORE_LD2, I_MEM_STORE_EXEC
     );
   type cpu_state is (
       sSTART,
@@ -96,7 +102,9 @@ package gb_cu_pkg is
   function should_branch(m : in branch_mode; flags : in alu_flags) return boolean;
   function next_cpu_state (s : in cpu_state ) return cpu_state;
   function decode_registers_basic(index: in std_logic_vector(2 downto 0)) return reg_name;
-
+  function instruction_has_reg_write(state : in instruction_state) return boolean;
+  function writes_to_ram(inst : instruction_state) return boolean;
+  function split_widereg (name : in widereg_name ; isLSB:  in boolean  ) return reg_name;
 end package gb_cu_pkg;
 
 package body gb_cu_pkg is 
@@ -154,7 +162,12 @@ function decode_registers_basic(index: in std_logic_vector(2 downto 0)) return r
   begin 
   case (inst) is
     when I_ABS_BRANCH_LD1| I_ABS_BRANCH_LD2| I_ABS_BRANCH_JMP => return false;   
+    when I_LD_WIDELOAD_LD1|I_LD_WIDELOAD_LD2 => return false;   
     when I_LD_EXEC => return false; 
+
+    when I_MEM_LOAD_LD1| I_MEM_LOAD_LD2| I_MEM_LOAD_EXEC => return false;
+    when I_MEM_STORE_LD1| I_MEM_STORE_LD2| I_MEM_STORE_EXEC => return false;
+
     when others => return true; -- for All, allways branch
   end case;
   end is_root_state;
@@ -168,6 +181,17 @@ function decode_registers_basic(index: in std_logic_vector(2 downto 0)) return r
     when others => return false;
   end case;
   end writes_flags;
+
+  -- decide if the instruction state writes to Ram
+  function writes_to_ram(inst : instruction_state) return boolean is 
+  begin
+      case (inst) is 
+      when R_LD_MEM|I_LD_EXEC_MEM => return true;
+      when I_MEM_STORE_EXEC => return true;
+      when others => return false;
+      end case;
+  end writes_to_ram;
+
 
   function decode_alu_mode(op : std_logic_vector(2 downto 0)) return alu_operation is 
   begin 
@@ -183,6 +207,60 @@ function decode_registers_basic(index: in std_logic_vector(2 downto 0)) return r
   end case;
   end decode_alu_mode;
 
+  function split_widereg (name : in widereg_name ; isLSB:  in boolean  ) return reg_name is   
+  begin     
+     
+  case(name) is
+when AF => 
+      if( isLSB) then 
+        return F;
+      else 
+        return A;
+      end if;
+when BC =>         
+      if( isLSB) then 
+        return C;
+      else 
+        return B;
+      end if;
+when DE =>        
+      if( isLSB) then 
+      return E;
+    else 
+      return D;
+    end if;
+when HL=> 
+    if( isLSB) then 
+      return L;
+    else 
+    return H;
+    end if;      
+when others  => return Zero;-- Zero is the missing one
+  end case;
+  end split_widereg;
+
+  -- decode instructions to decide if the instruction does register writeback or not
+  function instruction_has_reg_write(state : in instruction_state) return boolean is
+  begin
+      case (state) is 
+      -- simple alus.
+      when R_ALU =>    
+          return true;
+      -- inc/dec
+      when R_ALU_SIMPLE =>    
+          return true;
+      --second clock of inmediate alu
+      when I_ALU_LOAD =>    
+          return true;
+      -- loads
+      when R_LD|I_LD_EXEC|I_MEM_LOAD_EXEC => 
+          return true;
+
+      when I_LD_WIDELOAD_LD1|I_LD_WIDELOAD_LD2 =>
+        return true;
+      when others => return false;
+      end case;
+  end instruction_has_reg_write;
 
   function decode_op(op : in split_opcode) return cpu_op_signals is 
   variable v: cpu_op_signals;

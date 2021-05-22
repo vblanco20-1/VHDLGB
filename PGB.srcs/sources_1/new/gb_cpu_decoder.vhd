@@ -44,6 +44,7 @@ architecture Behavioral of gb_decoder is
     type dec_state is record    
         load_adress : gb_doubleword;    
         branch_adress : gb_doubleword;
+        inmediate : gb_doubleword; -- inmediate value
         opcode : gb_word;
         st : cpu_state;
         inst : instruction_state;
@@ -58,6 +59,7 @@ architecture Behavioral of gb_decoder is
     constant zero_state : dec_state := (    
         load_adress => x"0000",    
         branch_adress => x"0000",  
+        inmediate => x"0000",  
         opcode => x"00", 
         ramwrite => x"00",
         st => sSTART,
@@ -89,7 +91,13 @@ begin
             return R_STOP;
         else return NOOP; end if;
 
-        when "001" => return NOOP;
+        when "001" => 
+        if (dy(0) = '0') then
+            return I_LD_WIDELOAD;
+        else 
+            -- ADD HL
+            return NOOP;
+        end if;
         when "010" => return NOOP;
         when "011" => return NOOP;
         when "100" => return R_ALU_SIMPLE;
@@ -137,9 +145,9 @@ begin
                 when "010" => return I_ABS_BRANCH;
                 when "011" => return I_ABS_BRANCH;
                 when "100" => return NOOP;
-                when "101" => return NOOP;
+                when "101" => return I_MEM_STORE;
                 when "110" => return NOOP;
-                when others => return NOOP;    
+                when others => return I_MEM_LOAD;    
             end case;
 
         when "011" => 
@@ -149,7 +157,9 @@ begin
                 when others => return NOOP;
             end case;
         when "101" => return I_ALU;
-     
+        
+
+
         when others => return NOOP;    
     end case;
     
@@ -160,25 +170,7 @@ begin
 return NOOP;
 end decode_instruction_state;
 
--- decode instructions to decide if the instruction does register writeback or not
-function instruction_has_reg_write(state : in instruction_state) return boolean is
-begin
-    case (state) is 
-    -- simple alus.
-    when R_ALU =>    
-        return true;
-    -- inc/dec
-    when R_ALU_SIMPLE =>    
-        return true;
-    --second clock of inmediate alu
-    when I_ALU_LOAD =>    
-        return true;
-    -- loads
-    when R_LD|I_LD_EXEC => 
-        return true;
-    when others => return false;
-    end case;
-end instruction_has_reg_write;
+
 
 -- decode instructions to select the correct input for register write.
 -- aludata is output from alu
@@ -198,6 +190,10 @@ begin
         return ramdata;
     when I_LD_LOAD_MEM|I_LD_EXEC_MEM => 
         return ramdata;
+    when I_MEM_LOAD_EXEC =>
+        return ramdata;
+    when I_LD_WIDELOAD_LD1|I_LD_WIDELOAD_LD2 =>
+        return ramdata;
     when others => return x"00";
     end case;
 end select_reg_data;
@@ -209,10 +205,18 @@ function read_registers(state : in dec_state ; data : in gb_word) return reg_in 
     
 variable dy, dz: std_logic_vector(2 downto 0 );
 variable ret : reg_in;
+variable widereg : widereg_name;
 begin
     ret := zero_reg_in;    
     dy := data(5 downto 3);
     dz := data(2 downto 0);
+
+    case data(5 downto 4) is
+        when "00" => widereg:= BC;
+        when "01" => widereg := DE;
+        when "10" => widereg := HL;
+        when others => widereg := SP;    
+    end case;
 
     case (state.inst) is 
     -- simple alus. They allways use reg_A
@@ -246,6 +250,20 @@ begin
     ret.reg_A := decode_registers_basic(dz); 
     ret.reg_B := Zero;
     ret.reg_wide := HL;
+    when I_MEM_LOAD_EXEC|I_MEM_STORE_EXEC =>
+    ret.reg_A := A;
+    ret.reg_B := Zero;
+    ret.reg_wide := WideZero;
+    when I_LD_WIDELOAD_LD1=>
+    ret.reg_A := split_widereg(widereg, true);
+    ret.reg_B := Zero;
+    ret.reg_wide := WideZero;
+
+    when I_LD_WIDELOAD_LD2=>
+    ret.reg_A := split_widereg(widereg, false);
+    ret.reg_B := Zero;
+    ret.reg_wide := WideZero;
+
     when others => 
     ret.reg_B := Zero;
     ret.reg_B := Zero; -- just default to cero
@@ -263,7 +281,18 @@ begin
     when I_LD_LOAD => return I_LD_EXEC;
     when I_LD_LOAD_MEM => return I_LD_EXEC_MEM;
     when I_LD_EXEC_MEM => return R_LD_MEM_WRITE;
+    when I_LD_WIDELOAD => return I_LD_WIDELOAD_LD1;
+    when I_LD_WIDELOAD_LD1 => return I_LD_WIDELOAD_LD2;
     when R_LD_MEM => return R_LD_MEM_WRITE;
+
+    when I_MEM_LOAD => return I_MEM_LOAD_LD1;
+    when I_MEM_LOAD_LD1 => return I_MEM_LOAD_LD2;
+    when I_MEM_LOAD_LD2 => return I_MEM_LOAD_EXEC;
+
+    when I_MEM_STORE => return I_MEM_STORE_LD1;
+    when I_MEM_STORE_LD1 => return I_MEM_STORE_LD2;
+    when I_MEM_STORE_LD2 => return I_MEM_STORE_EXEC;
+
     when I_ABS_BRANCH => return I_ABS_BRANCH_LD1;
     when I_ABS_BRANCH_LD1 => return I_ABS_BRANCH_LD2;
     when I_ABS_BRANCH_LD2 => --once branch address is loaded it decides if branching or not
@@ -292,20 +321,12 @@ end calculate_next_addr;
 function calculate_next_PC(inst : in instruction_state; din : in decoder_in; branch_target : in gb_doubleword ) return gb_doubleword is 
 begin
     case (inst) is     
-    when R_LD_MEM|I_LD_EXEC_MEM => return din.reg.PC; -- when doing mem writes we dont advance PC
+    when R_LD_MEM|I_LD_EXEC_MEM|I_MEM_LOAD_EXEC|I_MEM_STORE_EXEC => return din.reg.PC; -- when doing mem writes we dont advance PC
     when I_ABS_BRANCH_JMP => return branch_target;
     when R_STOP => return x"0000";
     when others => return std_logic_vector(unsigned(din.reg.PC) + to_unsigned(1,16));
 end case;
 end calculate_next_PC;
--- decide if the instruction state writes to Ram
-function writes_to_ram(inst : instruction_state) return boolean is 
-begin
-    case (inst) is 
-    when R_LD_MEM|I_LD_EXEC_MEM => return true;
-    when others => return false;
-    end case;
-end writes_to_ram;
 
 begin    
 sync: process(i,clk,rin)
@@ -362,6 +383,10 @@ begin
         v.flags := i.reg.flags;
         if(r.inst = I_LD_LOAD_MEM) then 
             v.ramwrite := i.ram.data;
+        elsif (r.inst = I_MEM_LOAD_LD1 or r.inst = I_MEM_STORE_LD1) then 
+            v.inmediate(7 downto 0) := i.ram.data;
+        elsif (r.inst = I_MEM_LOAD_LD2 or r.inst = I_MEM_STORE_LD2) then 
+            v.inmediate(15 downto 8) := i.ram.data;       
         end if;
     end if;
 
@@ -414,12 +439,8 @@ begin
     if(r.st = sWAIT and not halted) then
         
         ov.reg.PCIn := calculate_next_PC(r.inst,i, r.branch_adress);
-    elsif (r.st = sSTART) then 
-        --if(i.request_interrupt = '0') then 
-            ov.reg.PCIn := x"0000";
-        --else
-        --   ov.reg.PCIn := i.interrupt_addr;
-        --end if;        
+    elsif (r.st = sSTART) then       
+        ov.reg.PCIn := x"0000";        
     else
         ov.reg.PCIn := i.reg.PC;
     end if;
@@ -462,19 +483,17 @@ begin
     ov.ram.addr := r.load_adress;
 
     -- ram outputs
-    if(r.st = sSTART) then 
-       -- if(i.request_interrupt = '0') then 
-            v.load_adress := x"0000";
-        --else
-        --    v.load_adress := i.interrupt_addr;
-        --end if;
+    if(r.st = sSTART) then        
+        v.load_adress := x"0000";    
         
     elsif(r.st = sEXEC) then -- calculate next adress at EXEC stage
         if(r.inst = I_ABS_BRANCH_JMP) then 
             v.load_adress := r.branch_adress;
         elsif (r.inst = R_LD_MEM or r.inst = I_LD_EXEC_MEM) then
             v.load_adress := i.reg.wide; -- HL      
-            ov.ram.addr := r.load_adress;       
+            --ov.ram.addr := r.load_adress;       
+        elsif (r.inst = I_MEM_LOAD_EXEC or r.inst = I_MEM_STORE_EXEC) then 
+            v.load_adress := r.inmediate;
         else
             if halted then 
                 v.load_adress := i.reg.PC;
@@ -493,7 +512,7 @@ begin
     end if;
      
     if(r.inst = I_LD_EXEC_MEM) then 
-        ov.ram.data := r.ramwrite;
+        ov.ram.data := r.ramwrite;    
     else     
         ov.ram.data := i.reg.data_A;
     end if;

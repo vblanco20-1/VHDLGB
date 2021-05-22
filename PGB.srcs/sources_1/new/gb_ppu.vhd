@@ -281,7 +281,12 @@ begin
 
         st.pixel_index := r.pixel_index + 1;
         st.push_x := r.push_x +1;
-        output_enable <= '1';
+        
+        if(r.push_x < 160) then -- only really push if its on correct range
+            output_enable <= '1';
+        else 
+            output_enable <= '0';
+        end if;
         pix_out(1)<= r.pixels(r.pixel_index).data(0);
         pix_out(0) <= r.pixels(r.pixel_index).data(1);
         pix_out_coord.x <= std_logic_vector(r.push_x);--td_logic_vector(r.push_x + r.pixel_index);
