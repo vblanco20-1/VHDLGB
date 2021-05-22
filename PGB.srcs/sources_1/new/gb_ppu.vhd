@@ -54,17 +54,18 @@ TileLoad2, -- loading sprite B
 PixelPush, -- calculating final pixels
 PixelWait -- waiting until pixel queue is free
 
+
 );
 
 type ppu_state is record
     pxA,pxB,tile   : std_logic_vector(7 downto 0);    
     
     --wants_load : std_logic;
-    pixels :  gb_pixel_line;
+    pixels, new_pixels :  gb_pixel_line;
     load_addr : std_logic_vector(15 downto 0);  
 
     pixel_index   : integer range 0 to 8; -- index for the pixel line
-    current_x : std_logic_vector(7 downto 0);
+    current_x, push_x : unsigned(7 downto 0);
     state : STATES;
 end record ppu_state;  
 
@@ -137,19 +138,8 @@ function tile_index (
     return to_integer(unsigned(idx));
 end tile_index;
 
-function inc(
-    n : in std_logic_vector(7 downto 0) -- pixel coordinates
-    )
-     return std_logic_vector is 
-
-    variable TMP : unsigned(7 downto 0);
-    begin
-        TMP := unsigned(n) + 1;
-    return std_logic_vector(TMP);
-end inc;
-
 function tile_index_uvec (
-    cx,cy : in std_logic_vector(7 downto 0) -- pixel coordinates
+    cx,cy : in unsigned(7 downto 0) -- pixel coordinates
     )
     return integer is 
     variable TMPx,TMPy : unsigned(7 downto 0);
@@ -187,17 +177,21 @@ comb: process(hstart,rom_data, vertline,r)
 variable st:  ppu_state;
 variable tilex,tiley: integer;
 variable wants_load: std_logic;
+variable vline : unsigned(7 downto 0);
 variable sprite_load_addr,tile_load_addr : std_logic_vector(15 downto 0);
 begin
     st := r;    
 
-    sprite_load_addr := calc_load_sprite(to_integer(unsigned(r.tile)),to_integer(unsigned(vertline)),0);
-    tile_load_addr := calc_load_tile(tile_index_uvec(r.current_x,vertline));
+    vline := unsigned(vertline);
+    sprite_load_addr := calc_load_sprite(to_integer(unsigned(r.tile)),to_integer(vline),0);
+    tile_load_addr := calc_load_tile(tile_index_uvec(r.current_x,vline));
 
     case (r.state) is
     when Idle => if hstart = '1' then
         st.state := Preload; -- begin execution        
         st.current_x := "00000000"; -- zero the x coord
+        st.pixel_index := 8; -- zero the pixel index
+        st.push_x := to_unsigned(0, r.push_x'length);
     end if;
     
     when Preload =>
@@ -222,25 +216,29 @@ begin
         st.pxB := rom_data;     
         
         st.state := PixelWait;
-        st.pixel_index := 0;
-
+        
+       -- st.push_x := r.current_x;
         for i in 0 to 7 loop            
-            st.pixels(7-i).data(1) := r.pxB(i);
-            st.pixels(7-i).data(0) := r.pxA(i);
+            st.new_pixels(7-i).data(1) := r.pxB(i);
+            st.new_pixels(7-i).data(0) := r.pxA(i);
         end loop;        
 
-    when PixelWait =>   
-        st.current_x := inc(st.current_x);
-        
-        if r.pixel_index < 7 then
-            st.pixel_index := r.pixel_index +1;            
-        else
+    when PixelWait =>
+
+        -- queue is fully pushed once pixel index is 8
+        if r.pixel_index = 8 then 
+           st.pixels := r.new_pixels;
+           st.pixel_index := 0;
+
+            st.current_x := r.current_x + 8;
+
             if(unsigned(st.current_x) < to_unsigned(170,8)) then
                  st.state := Preload;
             else 
                  st.state := LineEnd;
             end if;
-            st.pixel_index := 0;
+        else
+
         end if;
     when LineEnd => st.state := Idle;
     end case;   
@@ -278,20 +276,22 @@ begin
         when others =>  load_sprite <= '0';
     end case;
 
-    case r.state is
-        when PixelWait => 
-            output_enable <= '1';
-            
-            pix_out(1)<= r.pixels(r.pixel_index).data(0);
-            pix_out(0) <= r.pixels(r.pixel_index).data(1);
-            pix_out_coord.x <= st.current_x;
-            pix_out_coord.y <= vertline;
-        when others => 
-            output_enable <= '0';
-            pix_out <= "00";            
-            pix_out_coord.x <= "00000000";
-            pix_out_coord.y <= "00000000";
-    end case;
+    -- push pixels until pixel-index is 8
+    if(r.pixel_index /= 8  and r.state /= Idle) then 
+
+        st.pixel_index := r.pixel_index + 1;
+        st.push_x := r.push_x +1;
+        output_enable <= '1';
+        pix_out(1)<= r.pixels(r.pixel_index).data(0);
+        pix_out(0) <= r.pixels(r.pixel_index).data(1);
+        pix_out_coord.x <= std_logic_vector(r.push_x);--td_logic_vector(r.push_x + r.pixel_index);
+        pix_out_coord.y <= vertline;
+    else
+        output_enable <= '0';
+        pix_out <= "00";            
+        pix_out_coord.x <= "00000000";
+        pix_out_coord.y <= "00000000";
+    end if;
 
     case r.state is
         when LineEnd => 
