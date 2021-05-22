@@ -1,0 +1,14 @@
+- bigregs test program. should write 11 to adress 0 and 33 at adress 1
+$byte firstvar = 0x00
+$byte secondvar = 0x00
+noop
+- load adress of firstvar into hl
+ld hl @secondvar
+- store 11 on it
+ld (hl) #0x33
+- load val for firstvar
+ld a #0x11
+ld $firstvar a
+
+
+$byte halt = 0x76

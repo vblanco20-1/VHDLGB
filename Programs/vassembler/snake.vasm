@@ -46,7 +46,7 @@ ld e #0x7D
 
 ld L #0xFF
 --:clearloop_inner
--ld (hl) e
+-d (hl) e
 -dec L
 -jmp nz :clearloop_inner
 -inc H
@@ -63,11 +63,15 @@ ld a l
 add a d
 ld l a
 
+-- if a is zero, avoid the clear
+jmp z :postloop
 --a has L, decrement writing clear 
 :preloop
--ld (hl) #0xFF
--dec L
--jmp nz :preloop
+ld (hl) #0xFF
+dec L
+jmp nz :preloop
+
+:postloop
 
 --reset l to what it was
 ld l a
@@ -111,7 +115,7 @@ inc L
 ld (hl) #0xFF
 inc L
 
--- decrement y location of world
+-- decrement x location of world
 dec d
 jmp nz :branchend
 ld d #0x8

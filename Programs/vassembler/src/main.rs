@@ -20,7 +20,7 @@ struct LabelDeclaration{
     name : String,
     address: u16
 }
-#[derive(Debug,Clone)]
+#[derive(Debug,Clone,PartialEq)]
 enum Register{
     A,
     B,
@@ -30,8 +30,11 @@ enum Register{
     H,
     L,
     MHL,
+    // wide
+    HL,
     None
 }
+
 #[derive(Debug,PartialEq,Clone)]
 enum AluOP{
     Add,
@@ -62,6 +65,7 @@ struct VariableInstruction{
     regA: Register,
     variable : String
 }
+
 #[derive(Debug,Clone)]
 struct ALUInstruction{
     reg: Register,
@@ -80,6 +84,8 @@ enum InstructionType{
     R_LD(TypeAInstruction),
     I_LD(Imm8BInstruction),
     V_LD(VariableInstruction),
+    V_LD_Adress(VariableInstruction),
+    V_Store(VariableInstruction),
     R_ALU(ALUInstruction),
     Other()
 }
@@ -94,7 +100,12 @@ enum Line{
     Label(LabelDeclaration),
     Variable(VariableDeclaration)
 }
-
+fn is_wide_register(reg: &Register)  -> bool {
+    match reg {
+        Register::HL => return true,
+        _ => return false,
+    }
+}
 fn string_to_register(name: &str) -> Register
 {
     match name {
@@ -106,6 +117,7 @@ fn string_to_register(name: &str) -> Register
         "e" => return Register::E,
         "l" => return Register::L,
         "(hl)" => return Register::MHL,
+        "hl" => return Register::HL,
         _ => return Register::None,
     }
 }
@@ -120,7 +132,7 @@ fn reg_to_u8(r: &Register) -> Result<u8,&'static str >{
         Register::H => Ok(4),
         Register::L => Ok(5),
         Register::MHL=> Ok(6),
-        Register::None => Err("Invalid Register"),
+        _ => Err("Invalid Register"),
     }
 }
 fn write_registers(s : &TypeAInstruction) -> Result<u8,&'static str > {
@@ -280,22 +292,72 @@ fn parse_jp(line : &str, address:  &mut u16)-> Result<InstructionType,&'static s
 fn parse_op_ld(line : &str, address:  &mut u16) -> Result<InstructionType,&'static str> {
     let sections  : Vec<&str> = line.split(" ").collect();
 
-    if sections[2].contains("$") // variable ld
-    {        
-        let vars = VariableInstruction{
-            regA: string_to_register(sections[1]),
-            variable : sections[2].strip_prefix("$").unwrap().to_string()
-        };
+    let register = string_to_register(sections[1]);
+    
+    match register{
+    Register::None => {
+            if sections[1].contains("$") //variable store. Only A allowed
+            {
+                let register2 = string_to_register(sections[2]);
+                if register2 == Register::A
+                {
+                    let vars = VariableInstruction{
+                        regA: register,
+                        variable : sections[1].strip_prefix("$").unwrap().to_string()
+                    }; 
 
-        *address += 2; // load from memory is a 2 byte instructiuon
+                    *address += 3; // load into variable is a 3 byte instructiuon
 
-        return Ok(InstructionType::V_LD(vars));
+                    return Ok(InstructionType::V_Store(vars));
+                }
+                else{
+                    return Err("variable store has to store from A");
+                }                
+            }
+            else{
+                return Err("Didnt recognize first part of load op");
+            }
+    }
+     _ => {
+
+    if sections[2].contains("$") // variable load
+    {
+        if register == Register::A {
+        
+            let vars = VariableInstruction{
+                regA: register,
+                variable : sections[2].strip_prefix("$").unwrap().to_string()
+            };
+
+            *address += 3; // load from variable is a 3 byte instructiuon
+
+            return Ok(InstructionType::V_LD_Adress(vars));
+        }
+        else{
+            return Err("variable load instructions need to load into register A");
+        }
+    }
+    else if sections[2].contains("@") // variable adress load
+    {
+        if is_wide_register(&register) {
+        
+            let vars = VariableInstruction{
+                regA: register,
+                variable : sections[2].strip_prefix("@").unwrap().to_string()
+            };
+
+            *address += 3; // load adress from variable is a 3 byte instructiuon
+
+            return Ok(InstructionType::V_LD_Adress(vars));
+        }
+        else{
+            return Err("variable load instructions need to load into register A");
+        }
     }
     else if sections[2].contains("#") // immediate ld
     {
 
         let raw = sections[2].strip_prefix("#").unwrap().to_string();
-       
 
         let vars = Imm8BInstruction{
             regA: string_to_register(sections[1]),
@@ -305,7 +367,8 @@ fn parse_op_ld(line : &str, address:  &mut u16) -> Result<InstructionType,&'stat
        *address += 2; // load from inst is a 2 byte instructiuon
 
         return  Ok(InstructionType::I_LD(vars));
-    }
+    }   
+    
     else{
         let vars = TypeAInstruction{
             regA: string_to_register(sections[1]),
@@ -316,6 +379,8 @@ fn parse_op_ld(line : &str, address:  &mut u16) -> Result<InstructionType,&'stat
 
         return  Ok(InstructionType::R_LD(vars));       
     }
+    }
+    }    
 }
 
 fn assemble_file(filename : &str) -> Result<Vec<u8>,String>
@@ -351,7 +416,7 @@ fn assemble_file(filename : &str) -> Result<Vec<u8>,String>
             match parse_variable(s,&mut adresscounter) {
                 Ok(v) => {
                                        
-                    variableadresses.insert(v.name.clone(),v.address);       
+                    variableadresses.insert(v.name.clone(),v.address);
 
                     lines.push(Line::Variable(v));
                 },
@@ -401,8 +466,6 @@ fn assemble_file(filename : &str) -> Result<Vec<u8>,String>
                 address : adresscounter,
                 inst : InstructionType::Other()
             };
-
-            
 
             let mut newline = "".to_string();
             for sec in s.to_lowercase().split(" ") {
@@ -483,8 +546,6 @@ fn assemble_file(filename : &str) -> Result<Vec<u8>,String>
             lines.push(newLine);
         }
     }
-
-    
     
     let mut bytes : Vec<u8> = Vec::new();
 
@@ -512,6 +573,69 @@ fn assemble_file(filename : &str) -> Result<Vec<u8>,String>
                         
                         bytes.push(a.value);
                     },         
+                    InstructionType::V_Store(a) => 
+                    {
+                        bytes.push(0xEA); // opcode
+                         
+
+                        let label =variableadresses.get(&a.variable);
+                       
+                        if label.is_none()
+                        {
+                            println!("Cant load variable  {}", a.variable );
+                            bytes.push(0x00);
+                            bytes.push(0x00);
+                        }
+                        else{
+                            let mem = label.unwrap();
+                            bytes.push((mem & 0xFF) as u8); // LSB
+                            bytes.push(((mem & 0xFF00) >> 2)as u8); // MSB
+                        }
+                    }
+                    InstructionType::V_LD_Adress(a) => 
+                    {
+                        if a.regA != Register::HL {
+                            println!("loading from adress only allowed into HL!!");
+                        }
+
+                        bytes.push(0x21); // opcode                        
+
+                        let label =variableadresses.get(&a.variable);
+                       
+                        if(label.is_none())
+                        {
+                            println!("Cant load variable  {}", a.variable );
+                            bytes.push(0x00);
+                            bytes.push(0x00);
+                        }
+                        else{
+                            let mem = label.unwrap();
+                            bytes.push((mem & 0xFF) as u8); // LSB
+                            bytes.push(((mem & 0xFF00) >> 2)as u8); // MSB
+                        }
+                    }
+                    InstructionType::V_LD(a) => 
+                    {
+                        if a.regA != Register::A {
+                            println!("loading from variable only allowed into A!!");
+                        }
+
+                        bytes.push(0xFA); // opcode                        
+
+                        let label =variableadresses.get(&a.variable);
+                       
+                        if(label.is_none())
+                        {
+                            println!("Cant load variable  {}", a.variable );
+                            bytes.push(0x00);
+                            bytes.push(0x00);
+                        }
+                        else{
+                            let mem = label.unwrap();
+                            bytes.push((mem & 0xFF) as u8); // LSB
+                            bytes.push(((mem & 0xFF00) >> 2)as u8); // MSB
+                        }
+                    }
                     InstructionType::Jmp(a) => {
                         let label =labeladresses.get(&a.label);
                        
@@ -565,8 +689,12 @@ fn assemble_file(filename : &str) -> Result<Vec<u8>,String>
    return Ok(bytes);
 }
 
+
+
+
 fn main() {
 
+    {
     let files = [
         //"D:/FPGA/PGB/Programs/vassembler/starter.vasm",
         //"D:/FPGA/PGB/Programs/vassembler/microjump.vasm",
@@ -601,22 +729,61 @@ fn main() {
 
         offset += program_size;
     }
-
-    let mut vhdlarray = "".to_string();
-
     fs::write("D:/FPGA/PGB/Programs/rambuilder/snake.dump",finalbytes);
-/*
-    let mut counter = 0;
-    for b in finalbytes {
-        let mut byte = format!("{:#04x}\",",b);
-      
-        vhdlarray.push_str(&byte.replace("0x","x\""));
-        counter+=1;
-        if (counter% 16) == 0
-        {
-            vhdlarray.push_str("\n");
-        }
-    }
 
-    println!("{}",vhdlarray);*/
+    }
+    {
+        let files = [
+            "D:/FPGA/PGB/Programs/vassembler/starter.vasm",
+            "D:/FPGA/PGB/Programs/vassembler/microjump.vasm",
+            "D:/FPGA/PGB/Programs/vassembler/microloop.vasm",
+            "D:/FPGA/PGB/Programs/vassembler/microstore.vasm",
+            "D:/FPGA/PGB/Programs/vassembler/bigregs.vasm"            
+        ];
+    
+        let mut finalbytes : Vec<u8> = Vec::new();
+       
+       
+        let program_size = 16;
+    
+        finalbytes.resize(program_size * files.len(), 0);
+    
+        let mut offset = 0;
+        for f in files.iter(){
+            let bytes = assemble_file(f);      
+    
+            let mut i = 0;
+            for b in bytes.unwrap()
+            {
+                //println!("{}:  {:#04x}",i,b);
+                
+    
+                finalbytes[i + offset] = b;
+                i+= 1;
+            }
+            for n in i..program_size
+            {            
+                //println!("{}:  {:#04x}",n,0);
+            }
+    
+            offset += program_size;
+        }
+    
+
+        let mut vhdlarray = "".to_string();
+
+        let mut counter = 0;
+        for b in finalbytes {
+            let mut byte = format!("{:#04x}\",",b);
+          
+            vhdlarray.push_str(&byte.replace("0x","x\""));
+            counter+=1;
+            if (counter% 16) == 0
+            {
+                vhdlarray.push_str("\n");
+            }
+        }
+    
+        println!("{}",vhdlarray);
+        }    
 }
