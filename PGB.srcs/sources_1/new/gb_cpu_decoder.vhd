@@ -156,9 +156,7 @@ begin
                 when "001" => return PREFIX_CD;
                 when others => return NOOP;
             end case;
-        when "101" => return I_ALU;
-        
-
+        when "110" => return I_ALU;
 
         when others => return NOOP;    
     end case;
@@ -230,6 +228,10 @@ begin
     ret.reg_B := One;
     ret.reg_wide := WideZero;
     -- R2R LD, takes from y and z
+    when I_ALU_LOAD =>    
+    ret.reg_A := A; 
+    ret.reg_B := Zero;
+    ret.reg_wide := WideZero;
     when R_LD => 
     ret.reg_A := decode_registers_basic(dy); 
     ret.reg_B := decode_registers_basic(dz);
@@ -420,8 +422,16 @@ begin
     ov.reg := read_registers(r,r.opcode);
 
     -- we write at the write substate if the instruction has writeback
-    if((r.st = sWrite) and instruction_has_reg_write(r.inst)) then 
-        ov.reg.write_enable := '1';        
+    -- unless its an alu operation, then we have early write at EXEC stage
+    if( ((r.st = sWrite) and instruction_has_reg_write(r.inst)) or 
+    ((r.st = sExec) and instruction_has_early_reg_write(r.inst))         
+    ) then 
+     
+        if (r.inst = R_ALU or r.inst = I_ALU_LOAD) and op.y = "111" then 
+            ov.reg.write_enable := '0';
+        else
+            ov.reg.write_enable := '1';        
+        end if;
     else
         ov.reg.write_enable := '0';
     end if;

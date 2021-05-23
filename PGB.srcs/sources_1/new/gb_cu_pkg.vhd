@@ -54,7 +54,11 @@ package gb_cu_pkg is
 
        -- memory load/store
        I_MEM_LOAD, I_MEM_LOAD_LD1, I_MEM_LOAD_LD2, I_MEM_LOAD_EXEC,
-       I_MEM_STORE, I_MEM_STORE_LD1, I_MEM_STORE_LD2, I_MEM_STORE_EXEC
+       I_MEM_STORE, I_MEM_STORE_LD1, I_MEM_STORE_LD2, I_MEM_STORE_EXEC,
+
+       --register adress store/loads, complex
+       R_MEM_STORE, R_MEM_STORE_EXEC,
+       R_MEM_LOAD, R_MEM_LOAD_EXEC
     );
   type cpu_state is (
       sSTART,
@@ -103,6 +107,7 @@ package gb_cu_pkg is
   function next_cpu_state (s : in cpu_state ) return cpu_state;
   function decode_registers_basic(index: in std_logic_vector(2 downto 0)) return reg_name;
   function instruction_has_reg_write(state : in instruction_state) return boolean;
+  function instruction_has_early_reg_write(state : in instruction_state) return boolean;
   function writes_to_ram(inst : instruction_state) return boolean;
   function split_widereg (name : in widereg_name ; isLSB:  in boolean  ) return reg_name;
 end package gb_cu_pkg;
@@ -242,16 +247,7 @@ when others  => return Zero;-- Zero is the missing one
   -- decode instructions to decide if the instruction does register writeback or not
   function instruction_has_reg_write(state : in instruction_state) return boolean is
   begin
-      case (state) is 
-      -- simple alus.
-      when R_ALU =>    
-          return true;
-      -- inc/dec
-      when R_ALU_SIMPLE =>    
-          return true;
-      --second clock of inmediate alu
-      when I_ALU_LOAD =>    
-          return true;
+      case (state) is      
       -- loads
       when R_LD|I_LD_EXEC|I_MEM_LOAD_EXEC => 
           return true;
@@ -262,6 +258,22 @@ when others  => return Zero;-- Zero is the missing one
       end case;
   end instruction_has_reg_write;
 
+  -- decode instructions to decide if the instruction does register writeback or not
+  function instruction_has_early_reg_write(state : in instruction_state) return boolean is
+    begin
+        case (state) is 
+        -- simple alus.
+        when R_ALU =>    
+            return true;
+        -- inc/dec
+        when R_ALU_SIMPLE =>    
+            return true;
+        --second clock of inmediate alu
+        when I_ALU_LOAD =>    
+            return true;
+        when others => return false;
+        end case;
+    end instruction_has_early_reg_write;
   function decode_op(op : in split_opcode) return cpu_op_signals is 
   variable v: cpu_op_signals;
 

@@ -92,7 +92,7 @@ when o_SUB =>
     FullAccum := Aub - (Bub + carry);
     HalfAccum := ('0' & Aub(3 downto 0)) - ('0' & Bub(3 downto 0)) - carry(4 downto 0);
   
-    v.flags.full_carry := FullAccum(8);
+    v.flags.full_carry := not FullAccum(8);
     v.flags.half_carry :=  HalfAccum(4); 
 
     v.flags.subtract := '1';
