@@ -1,0 +1,16 @@
+- alu ops test program. should write 8 to adress 0 and 1F at adress 1
+- with registers A and B as a=0x10
+$byte firstvar = 0x00
+$byte secondvar = 0x00
+ld a #0xFF
+and a #0x07
+ld b #0x01
+add a b
+ld hl @firstvar
+ld (hl) a
+inc l
+or a #0x1F
+ld (hl) a
+xor a #0x0F
+
+$byte halt = 0x76

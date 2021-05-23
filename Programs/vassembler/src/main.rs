@@ -41,6 +41,10 @@ enum AluOP{
     Sub,
     Inc,
     Dec,
+    And,
+    Or,
+    Xor,
+    Cmp,
     None
 }
 
@@ -72,6 +76,11 @@ struct ALUInstruction{
     operation : AluOP
 }
 #[derive(Debug,Clone)]
+struct Imm8AluInstruction{
+    value: u8,
+    operation : AluOP
+}
+#[derive(Debug,Clone)]
 struct JumpInstruction{
     label: String,
     mode: JumpMode
@@ -87,6 +96,7 @@ enum InstructionType{
     V_LD_Adress(VariableInstruction),
     V_Store(VariableInstruction),
     R_ALU(ALUInstruction),
+    I_ALU(Imm8AluInstruction),
     Other()
 }
 #[derive(Debug,Clone)]
@@ -157,6 +167,10 @@ fn write_AluInstruction(s : &ALUInstruction)-> Result<u8,&'static str > {
     match s.operation{
         AluOP::Add => {op = 0;},
         AluOP::Sub => {op = 2;},    
+        AluOP::And => {op = 4;},
+        AluOP::Xor => {op = 5;},    
+        AluOP::Or => {op = 6;},
+        AluOP::Cmp => {op = 7;},    
         AluOP::Inc => {
             let incprefix : u8 = 0;
             let z : u8 = 4;
@@ -181,6 +195,30 @@ fn write_AluInstruction(s : &ALUInstruction)-> Result<u8,&'static str > {
     u |= prefix << 6;
     return Ok(u);
 }
+
+
+fn write_AluInstruction_Imm(s : &Imm8AluInstruction)-> Result<u8,&'static str > {
+    
+    let mut op = 0;
+
+   
+
+    match s.operation{
+        AluOP::Add => {op = 0;},
+        AluOP::Sub => {op = 2;},    
+        AluOP::And => {op = 4;},
+        AluOP::Xor => {op = 5;},    
+        AluOP::Or => {op = 6;},
+        AluOP::Cmp => {op = 7;}
+        _ => {return Err("Invalid alu operation");}
+    };
+    let prefix : u8 = 3;
+    let mut u : u8= 6;
+    u |= op << 3;
+    u |= prefix << 6;
+    return Ok(u);
+}
+
 fn write_RegInstruction(s : &TypeAInstruction, prefix: u8) -> Result<u8,&'static str > {
     let mut u = write_registers(s)?;
     u |= prefix << 6;
@@ -198,6 +236,10 @@ fn get_alu(s : &str) -> Option<AluOP> {
        "sub" => Some(AluOP::Sub),
        "inc" => Some(AluOP::Inc),
        "dec" => Some(AluOP::Dec),
+       "and" => Some(AluOP::And),
+       "or" => Some(AluOP::Or),
+       "xor" => Some(AluOP::Xor),
+       "cmp" => Some(AluOP::Cmp),
        _ =>  Option::None
    }
 }
@@ -508,16 +550,35 @@ fn assemble_file(filename : &str) -> Result<Vec<u8>,String>
     
                     adresscounter += 1;
                 }
-                else{
-                    let vars = ALUInstruction{
-                        operation: op,
-                        reg: string_to_register(sections[2]),
-                    };
-    
-                    inst.inst = InstructionType::R_ALU(vars);
-    
-                    adresscounter += 1;
+                else if regA == Register::A{
 
+                    if sections[2].contains("#") // immediate alu
+                    {
+                
+                        let raw = sections[2].strip_prefix("#").unwrap().to_string();
+                
+                        let vars = Imm8AluInstruction{
+                            operation:  op,
+                            value : hex_to_u8(&raw).unwrap()
+                        };
+                
+                        adresscounter += 2;
+                
+                        inst.inst = InstructionType::I_ALU(vars);
+                    }   
+                    else{
+                        let vars = ALUInstruction{
+                            operation: op,
+                            reg: string_to_register(sections[2]),
+                        };
+        
+                        inst.inst = InstructionType::R_ALU(vars);
+        
+                        adresscounter += 1;
+                    }
+                }
+                else{
+                    println!("Invalid alu op, target register must be A {}",sections[1]);
                 }
                 
             }
@@ -672,6 +733,11 @@ fn assemble_file(filename : &str) -> Result<Vec<u8>,String>
                         }
 
                     },        
+                    InstructionType::I_ALU(a) => {
+
+                        bytes.push(write_AluInstruction_Imm(&a).unwrap());
+                        bytes.push(a.value);
+                    }
                     InstructionType::R_ALU(a) => bytes.push(write_AluInstruction(&a).unwrap()),                                   
                     _ => bytes.push(0x00),
                 }
@@ -738,13 +804,14 @@ fn main() {
             "D:/FPGA/PGB/Programs/vassembler/microjump.vasm",
             "D:/FPGA/PGB/Programs/vassembler/microloop.vasm",
             "D:/FPGA/PGB/Programs/vassembler/microstore.vasm",
-            "D:/FPGA/PGB/Programs/vassembler/bigregs.vasm"            
+            "D:/FPGA/PGB/Programs/vassembler/bigregs.vasm",
+            "D:/FPGA/PGB/Programs/vassembler/aluops.vasm"                
         ];
     
         let mut finalbytes : Vec<u8> = Vec::new();
        
        
-        let program_size = 16;
+        let program_size = 32;
     
         finalbytes.resize(program_size * files.len(), 0);
     
