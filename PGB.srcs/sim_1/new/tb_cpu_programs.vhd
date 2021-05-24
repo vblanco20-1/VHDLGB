@@ -77,7 +77,7 @@ signal tr_nextdata: gb_word;
 signal program_index: std_logic_vector(15 downto 0);
 signal ram_write : std_logic;
 signal ram_write_data: gb_word;
-TYPE mem_type IS ARRAY(0 TO (32*6-1)) OF gb_word; 
+TYPE mem_type IS ARRAY(0 TO (32*7-1)) OF gb_word; 
 
 
 
@@ -92,8 +92,10 @@ signal test_block_1 : mem_type := (
   x"00",x"00",x"00",x"00",x"00",x"00",x"00",x"00",x"00",x"00",x"00",x"00",x"00",x"00",x"00",x"00",
   x"00",x"00",x"00",x"21",x"01",x"00",x"36",x"33",x"3e",x"11",x"ea",x"00",x"00",x"76",x"00",x"00",
   x"00",x"00",x"00",x"00",x"00",x"00",x"00",x"00",x"00",x"00",x"00",x"00",x"00",x"00",x"00",x"00",
-  x"00",x"00",x"3e",x"ff",x"e6",x"07",x"06",x"01",x"80",x"21",x"00",x"00",x"77",x"2c",x"f6",x"1f",
-  x"fe",x"12",x"da",x"17",x"00",x"3e",x"ff",x"77",x"ee",x"0f",x"76",x"00",x"00",x"00",x"00",x"00");
+  x"00",x"00",x"fa",x"1c",x"00",x"e6",x"07",x"06",x"01",x"80",x"21",x"00",x"00",x"77",x"2c",x"f6",
+  x"1f",x"fe",x"12",x"da",x"18",x"00",x"3e",x"ff",x"77",x"ee",x"0f",x"76",x"ff",x"00",x"00",x"00",
+  x"00",x"00",x"00",x"00",x"3e",x"ff",x"c6",x"02",x"ea",x"00",x"00",x"21",x"01",x"00",x"36",x"11",
+  x"2c",x"fa",x"1d",x"00",x"77",x"21",x"1e",x"00",x"7e",x"ea",x"03",x"00",x"76",x"0a",x"30",x"00");
 
 
 begin
@@ -267,6 +269,26 @@ begin
   check_equal( test_block_1(32*5) ,std_logic_vector'(x"08"), result("should end with m1 at x08"));   
   check_equal( test_block_1(32*5 + 1) ,std_logic_vector'(x"1F"), result("should end with m2 at x1F"));     
   check_equal( regout.data_A ,std_logic_vector'(x"10"), result("should end loop with a = x10"));   
+  end if;
+  if run("vars") then --this one should write 33 to adress 1 and 11 to adress 0
+  program_index <=  std_logic_vector'(x"0006");
+  read_reg <= '0';
+  wantsclock <= '1';
+  reset <= '1';
+
+  wait for 4 ns;
+  reset <= '0';
+
+  wait for 400 ns; 
+  read_reg <= '1';
+
+  wait for 2 ns;
+
+  check_equal( test_block_1(32*6) ,std_logic_vector'(x"01"), result("should end with m1 at x01"));   
+  check_equal( test_block_1(32*6 + 1) ,std_logic_vector'(x"11"), result("should end with m2 at x11"));
+  check_equal( test_block_1(32*6 + 2) ,std_logic_vector'(x"0A"), result("should end with m3 at xA"));     
+  check_equal( test_block_1(32*6 + 3) ,std_logic_vector'(x"30"), result("should end with m4 at x30"));          
+ 
   end if;
 
 

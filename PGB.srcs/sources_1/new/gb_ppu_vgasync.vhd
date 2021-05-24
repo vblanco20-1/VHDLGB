@@ -41,8 +41,8 @@ type STATES is (
 Idle, -- nothing is happening
 LineStart, -- preload line
 LineRender, -- render line
-LineEnd --post render
---FrameEnd-- frame finished
+LineEnd, --post render
+FrameEnd-- frame finished
 );
 
 type sync_state is record
@@ -88,14 +88,20 @@ when LineRender => -- line render counts until ppu signaled finish
         sc.state := LineEnd; 
     end if;
 when LineEnd => -- wait until hsync, restart to idle if end of frame
-     if(hsync = '1') then         
+     --if(hsync = '1') then         
         sc.vcnt := r.vcnt + 1;
         if(r.vcnt >= 144) then 
-            sc.state := Idle;
-            fe := '1';
+            sc.state := FrameEnd;
+           
         else
             sc.state := LineStart;
         end if;
+    --end if;
+when FrameEnd => -- loop the vcount back to zero to give time for the cpu interrupt
+    fe := '1';
+    sc.vcnt := r.vcnt - 1;
+    if(r.vcnt = 0) then 
+        sc.state := Idle;
     end if;
 end case;
 

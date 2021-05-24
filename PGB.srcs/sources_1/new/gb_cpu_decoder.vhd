@@ -116,7 +116,9 @@ begin
         return HALT;
     else
         if(dy = "110") then -- (HL), memory write
-            return R_LD_MEM;
+            return R_LD_MEM_STORE;
+        elsif(dz ="110") then -- (HL), memory load
+            return R_LD_MEM_LOAD;
         else
             return R_LD; -- prefix 01 is reg loads
         end if;
@@ -188,7 +190,7 @@ begin
         return ramdata;
     when I_LD_LOAD_MEM|I_LD_EXEC_MEM => 
         return ramdata;
-    when I_MEM_LOAD_EXEC =>
+    when I_MEM_LOAD_EXEC|R_LD_MEM_LOAD_EXEC =>
         return ramdata;
     when I_LD_WIDELOAD_LD1|I_LD_WIDELOAD_LD2 =>
         return ramdata;
@@ -248,11 +250,19 @@ begin
     ret.reg_A := Zero; 
     ret.reg_B := Zero;
     ret.reg_wide :=  HL;
-    when R_LD_MEM => 
+    when R_LD_MEM_STORE => 
     ret.reg_A := decode_registers_basic(dz); 
     ret.reg_B := Zero;
     ret.reg_wide := HL;
+    when R_LD_MEM_LOAD_EXEC|R_LD_MEM_LOAD => 
+    ret.reg_A := decode_registers_basic(dy); 
+    ret.reg_B := Zero;
+    ret.reg_wide := HL;
     when I_MEM_LOAD_EXEC|I_MEM_STORE_EXEC =>
+    ret.reg_A := A;
+    ret.reg_B := Zero;
+    ret.reg_wide := WideZero;
+    when I_MEM_STORE_LD2 =>
     ret.reg_A := A;
     ret.reg_B := Zero;
     ret.reg_wide := WideZero;
@@ -282,10 +292,12 @@ begin
     case (inst) is 
     when I_LD_LOAD => return I_LD_EXEC;
     when I_LD_LOAD_MEM => return I_LD_EXEC_MEM;
-    when I_LD_EXEC_MEM => return R_LD_MEM_WRITE;
+    when I_LD_EXEC_MEM => return R_LD_MEM_STORE_WRITE;
     when I_LD_WIDELOAD => return I_LD_WIDELOAD_LD1;
     when I_LD_WIDELOAD_LD1 => return I_LD_WIDELOAD_LD2;
-    when R_LD_MEM => return R_LD_MEM_WRITE;
+
+    when R_LD_MEM_STORE => return R_LD_MEM_STORE_WRITE;
+    when R_LD_MEM_LOAD => return R_LD_MEM_LOAD_EXEC;
 
     when I_MEM_LOAD => return I_MEM_LOAD_LD1;
     when I_MEM_LOAD_LD1 => return I_MEM_LOAD_LD2;
@@ -323,7 +335,7 @@ end calculate_next_addr;
 function calculate_next_PC(inst : in instruction_state; din : in decoder_in; branch_target : in gb_doubleword ) return gb_doubleword is 
 begin
     case (inst) is     
-    when R_LD_MEM|I_LD_EXEC_MEM|I_MEM_LOAD_EXEC|I_MEM_STORE_EXEC => return din.reg.PC; -- when doing mem writes we dont advance PC
+    when R_LD_MEM_STORE|R_LD_MEM_LOAD|I_LD_EXEC_MEM|I_MEM_STORE_LD2|I_MEM_LOAD_LD2 => return din.reg.PC; -- when doing mem writes we dont advance PC
     when I_ABS_BRANCH_JMP => return branch_target;
     when R_STOP => return x"0000";
     when others => return std_logic_vector(unsigned(din.reg.PC) + to_unsigned(1,16));
@@ -375,6 +387,7 @@ begin
     
 
     if(r.st = sFETCH) then 
+        --update the interrupt logic by the fetch stage
         v.last_int := r.current_int;
         v.current_int := i.request_interrupt;
 
@@ -385,9 +398,9 @@ begin
         v.flags := i.reg.flags;
         if(r.inst = I_LD_LOAD_MEM) then 
             v.ramwrite := i.ram.data;
-        elsif (r.inst = I_MEM_LOAD_LD1 or r.inst = I_MEM_STORE_LD1) then 
+        elsif (r.inst = I_MEM_LOAD or r.inst = I_MEM_STORE) then 
             v.inmediate(7 downto 0) := i.ram.data;
-        elsif (r.inst = I_MEM_LOAD_LD2 or r.inst = I_MEM_STORE_LD2) then 
+        elsif (r.inst = I_MEM_LOAD_LD1 or r.inst = I_MEM_STORE_LD1) then 
             v.inmediate(15 downto 8) := i.ram.data;       
         end if;
     end if;
@@ -497,20 +510,26 @@ begin
         v.load_adress := x"0000";    
         
     elsif(r.st = sEXEC) then -- calculate next adress at EXEC stage
-        if(r.inst = I_ABS_BRANCH_JMP) then 
-            v.load_adress := r.branch_adress;
-        elsif (r.inst = R_LD_MEM or r.inst = I_LD_EXEC_MEM) then
-            v.load_adress := i.reg.wide; -- HL      
-            --ov.ram.addr := r.load_adress;       
-        elsif (r.inst = I_MEM_LOAD_EXEC or r.inst = I_MEM_STORE_EXEC) then 
-            v.load_adress := r.inmediate;
-        else
-            if halted then 
-                v.load_adress := i.reg.PC;
-            else
-                v.load_adress := calculate_next_addr(r.inst,i);
-            end if;
-        end if;
+
+        case r.inst is 
+
+            when I_ABS_BRANCH_JMP => 
+                v.load_adress := r.branch_adress;
+
+            when R_LD_MEM_STORE|I_LD_EXEC_MEM|R_LD_MEM_LOAD =>
+                v.load_adress := i.reg.wide;
+
+            when I_MEM_LOAD_LD2|I_MEM_STORE_LD2 =>
+                 v.load_adress := r.inmediate;
+
+            when others =>
+                if halted then 
+                    v.load_adress := i.reg.PC;
+                else
+                    v.load_adress := calculate_next_addr(r.inst,i);
+                end if;
+        end case;
+
     end  if;
 
     
@@ -533,12 +552,6 @@ begin
     else
         ov.ramclock := '0';
     end if;
-
-    --if unlock then 
-    --    v := zero_state;
-    --    v.current_int := '1';
-    --    v.last_int := '1';
-    --end if;
 
     if reset = '1' then
         rin <= zero_state;

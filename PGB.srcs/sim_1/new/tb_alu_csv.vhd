@@ -120,7 +120,11 @@ begin
   check_equal(aout.flags.zero, itou(f_z), result(":FZ Error: " & s.all));
   check_equal(aout.flags.subtract, itou(f_n), result(":FN Error: " & s.all));
   check_equal(aout.flags.half_carry, itou(f_h), result(":FH Error: " & s.all));
+  if(mode = o_SUB) then 
+  check_equal(not aout.flags.full_carry, itou(f_c), result(":FC Error: " & s.all));
+  else
   check_equal(aout.flags.full_carry, itou(f_c), result(":FC Error: " & s.all));
+  end if;
   end loop;
 end run_csv;
 

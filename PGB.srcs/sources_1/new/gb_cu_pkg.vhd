@@ -45,7 +45,9 @@ package gb_cu_pkg is
        -- register based load
        R_LD,
        -- register load, but write mem
-       R_LD_MEM, R_LD_MEM_WRITE,
+       R_LD_MEM_STORE, R_LD_MEM_STORE_WRITE,
+       -- register load, but load mem
+       R_LD_MEM_LOAD, R_LD_MEM_LOAD_EXEC,
 
        I_LD_LOAD, I_LD_EXEC,
        I_LD_LOAD_MEM, I_LD_EXEC_MEM,       
@@ -191,8 +193,8 @@ function decode_registers_basic(index: in std_logic_vector(2 downto 0)) return r
   function writes_to_ram(inst : instruction_state) return boolean is 
   begin
       case (inst) is 
-      when R_LD_MEM|I_LD_EXEC_MEM => return true;
-      when I_MEM_STORE_EXEC => return true;
+      when R_LD_MEM_STORE|I_LD_EXEC_MEM => return true;
+      when I_MEM_STORE_LD2 => return true;
       when others => return false;
       end case;
   end writes_to_ram;
@@ -249,7 +251,7 @@ when others  => return Zero;-- Zero is the missing one
   begin
       case (state) is      
       -- loads
-      when R_LD|I_LD_EXEC|I_MEM_LOAD_EXEC => 
+      when R_LD|I_LD_EXEC|I_MEM_LOAD_EXEC|R_LD_MEM_LOAD_EXEC => 
           return true;
 
       when I_LD_WIDELOAD_LD1|I_LD_WIDELOAD_LD2 =>
