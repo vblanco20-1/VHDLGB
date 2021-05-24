@@ -373,7 +373,7 @@ fn parse_op_ld(line : &str, address:  &mut u16) -> Result<InstructionType,&'stat
 
             *address += 3; // load from variable is a 3 byte instructiuon
 
-            return Ok(InstructionType::V_LD_Adress(vars));
+            return Ok(InstructionType::V_LD(vars));
         }
         else{
             return Err("variable load instructions need to load into register A");
@@ -798,6 +798,7 @@ fn main() {
     fs::write("D:/FPGA/PGB/Programs/rambuilder/snake.dump",finalbytes);
 
     }
+    //if false
     {
         let files = [
             "D:/FPGA/PGB/Programs/vassembler/starter.vasm",
@@ -805,7 +806,8 @@ fn main() {
             "D:/FPGA/PGB/Programs/vassembler/microloop.vasm",
             "D:/FPGA/PGB/Programs/vassembler/microstore.vasm",
             "D:/FPGA/PGB/Programs/vassembler/bigregs.vasm",
-            "D:/FPGA/PGB/Programs/vassembler/aluops.vasm"                
+            "D:/FPGA/PGB/Programs/vassembler/aluops.vasm",
+            "D:/FPGA/PGB/Programs/vassembler/variables.vasm"                  
         ];
     
         let mut finalbytes : Vec<u8> = Vec::new();
@@ -852,5 +854,5 @@ fn main() {
         }
     
         println!("{}",vhdlarray);
-        }    
+    }    
 }

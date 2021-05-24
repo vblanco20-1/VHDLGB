@@ -2,7 +2,7 @@
 - with registers A and B as a=0x10
 $byte firstvar = 0x00
 $byte secondvar = 0x00
-ld a #0xFF
+ld a $fullvar
 and a #0x07
 ld b #0x01
 add a b
@@ -10,7 +10,14 @@ ld hl @firstvar
 ld (hl) a
 inc l
 or a #0x1F
+- compare a with 12, which is bigger. Should carry
+cmp a #0x12
+jmp c :branch
+ld a #0xFF 
+
+:branch
 ld (hl) a
 xor a #0x0F
 
 $byte halt = 0x76
+$byte fullvar = 0xFF

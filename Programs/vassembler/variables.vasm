@@ -1,0 +1,29 @@
+- variable load/store ops test program. Reserves 4 mem locations, should be: 
+- 1v = 0x01, - 2v = 0x11, 3v = 0A, 4v = 30
+$byte firstvar = 0x00
+$byte secondvar = 0x00
+$byte thirdvar = 0x00
+$byte fourvar = 0x00
+-- load const1  (ff) and and it, store in var1
+ld a #0xFF
+add a #0x02
+ld $firstvar a
+
+--load 11 into secondvar though inmediate load
+ld hl @secondvar
+ld (hl) #0x11
+
+- hl is now 3rdvar
+inc l
+ld a $cnst2
+ld (hl) a
+
+-- load adress of const3 into hl, load that to A, store in fourvar
+ld hl @cnst3
+ld a (hl)
+ld $fourvar a
+
+$byte halt = 0x76
+
+$byte cnst2 = 0x0A
+$byte cnst3 = 0x30

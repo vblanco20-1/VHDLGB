@@ -18,6 +18,7 @@ noop
 #byte lW = 0x20
 #byte lR = 0x1B 
 #byte lD = 0x0D
+#byte SnakeHead = 0xE3
 --draw 255 times before going to next line
 #byte drawcount = 0xFF
 
@@ -25,11 +26,53 @@ noop
 #byte Mp_MSB = 0x98
 #byte Mp_LSB = 0x00
 
+$byte framecounter = 0x00
+$byte wordpos = 0x05
+$byte snake_x = 0x01
+$byte snake_y_lsb = 0x03
+$byte snake_y_msb = 0x98
+
+noop
 :vsync
 noop
+- handle framecounter
+ld a $framecounter
+inc A
+and a #0x0F
+ld H #0x99
+ld L #0x00
+ld (hl) a
+ld $framecounter a
+
+----- handle snake cursor and clear
+-- load snake position memory adress
+ld a $snake_y_lsb
+ld l a
+ld a $snake_y_msb
+ld h a
+
+- add snakex to adress
+ld a $snake_x
+ld c a
+add a L
+ld l a
+ld (hl) #0xE3
+
+jmp :endframe
+
+-- inc l to move to the right
+-inc a
+-ld l a
+
+--write head
+-ld (hl) $SnakeHead
+
+-and a #0x14
+-ld $snake_x a
+
 
 -- load drawcount into c
-ld c $drawcount 
+-ld c $drawcount 
 
 --hello world implementation
 
@@ -58,20 +101,23 @@ ld L #0xFF
 ld H $Mp_MSB
 ld L $Mp_LSB
 
+-- load wordpos into dec
+ld a $wordpos
+ld d a
 -- increment l by d
 ld a l
 add a d
 ld l a
 
 -- if a is zero, avoid the clear
-jmp z :postloop
+-jmp z :postloop
 --a has L, decrement writing clear 
-:preloop
-ld (hl) #0xFF
-dec L
-jmp nz :preloop
+-:preloop
+-ld (hl) #0xFF
+-dec L
+-jmp nz :preloop
 
-:postloop
+-:postloop
 
 --reset l to what it was
 ld l a
@@ -116,19 +162,20 @@ ld (hl) #0xFF
 inc L
 
 -- decrement x location of world
-dec d
-jmp nz :branchend
-ld d #0x8
+-dec d
+-jmp nz :branchend
+-ld d #0x8
 
-:branchend
+-:branchend
+:endframe
+inc l
+
 $byte halt = 0x76
 
 jmp :vsync
 
 :init
 noop
-ld a #0xCC
-ld d #0x8
 noop
 jmp :vsync
 noop
